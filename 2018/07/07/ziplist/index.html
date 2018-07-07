@@ -1,4 +1,5 @@
 <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> Redis ziplist实现 · oooo</title><meta name="description" content="Redis ziplist实现 - 龙雄球"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="https://longxq.github.io/atom.xml" title="oooo"></head><body><div class="wrap"><header><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">BLOG</a></li><li class="nav-list-item"><a href="/archives/" target="_self" class="nav-list-link">ARCHIVE</a></li><li class="nav-list-item"><a href="https://github.com/LongXQ" target="_blank" class="nav-list-link">GITHUB</a></li><li class="nav-list-item"><a href="/atom.xm" target="_self" class="nav-list-link">RSS</a></li></ul></header><main class="container"><div class="post"><article class="post-block"><h1 class="post-title">Redis ziplist实现</h1><div class="post-info">Jul 7, 2018</div><div class="post-content"><p>ziplist结构是Redis内部用来实现REDIS_ENCODING_ZIPLIST对象编码的。</p>
+<a id="more"></a>
 <h3 id="ziplist结构分析"><a href="#ziplist结构分析" class="headerlink" title="ziplist结构分析"></a>ziplist结构分析</h3><p>首先我们从总体上来看下ziplist结构的总体布局:</p>
 <figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">zlbytes</span>&gt;</span><span class="tag">&lt;<span class="name">zltail</span>&gt;</span><span class="tag">&lt;<span class="name">zllen</span>&gt;</span><span class="tag">&lt;<span class="name">entry</span>&gt;</span><span class="tag">&lt;<span class="name">entry</span>&gt;</span>...<span class="tag">&lt;<span class="name">entry</span>&gt;</span><span class="tag">&lt;<span class="name">zlend</span>&gt;</span></span><br></pre></td></tr></table></figure>
 <p>接着看看ziplist中每一个部分的作用.</p>
@@ -36,7 +37,7 @@
 <p><img src="/images/REDIS_ENCODING_ZIPLIST.png" alt="REDIS_ENCODING_ZIPLIST">  </p>
 <p>再来看看一个完整的使用了REDIS_ENCODING_ZIPLIST对象编码的Redis list对象的结构:  </p>
 <p><img src="/images/redis_list_1.png" alt="REDIS_LIST"></p>
-</div></article></div></main><footer><div class="paginator"><a href="/2018/07/07/redis2/" class="next">NEXT</a></div><div id="disqus_thread"></div><script>var disqus_shortname = 'longxq-github-io';
+</div></article></div></main><footer><div class="paginator"><a href="/2018/07/07/redis_dict/" class="prev">PREV</a><a href="/2018/07/07/redis2/" class="next">NEXT</a></div><div id="disqus_thread"></div><script>var disqus_shortname = 'longxq-github-io';
 var disqus_identifier = '2018/07/07/ziplist/';
 var disqus_title = 'Redis ziplist实现';
 var disqus_url = 'https://longxq.github.io/2018/07/07/ziplist/';

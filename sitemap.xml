@@ -2,9 +2,30 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://longxq.github.io/2018/07/07/redisdb/</loc>
+    
+    <lastmod>2018-07-07T14:24:29.065Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/redis_intset/</loc>
+    
+    <lastmod>2018-07-07T14:22:45.695Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/redis_dict/</loc>
+    
+    <lastmod>2018-07-07T14:20:22.919Z</lastmod>
+    
+  </url>
+  
+  <url>
     <loc>https://longxq.github.io/2018/07/07/ziplist/</loc>
     
-    <lastmod>2018-07-07T14:13:10.155Z</lastmod>
+    <lastmod>2018-07-07T14:14:45.983Z</lastmod>
     
   </url>
   

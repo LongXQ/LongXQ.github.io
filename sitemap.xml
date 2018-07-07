@@ -2,6 +2,13 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://longxq.github.io/2018/07/07/socketreadwrite/</loc>
+    
+    <lastmod>2018-07-07T15:05:29.882Z</lastmod>
+    
+  </url>
+  
+  <url>
     <loc>https://longxq.github.io/2018/07/07/tcpwait/</loc>
     
     <lastmod>2018-07-07T14:59:40.902Z</lastmod>
@@ -19,13 +26,6 @@
     <loc>https://longxq.github.io/2018/07/07/tcpconnect/</loc>
     
     <lastmod>2018-07-07T14:59:24.037Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>https://longxq.github.io/2018/07/07/socketreadwrite/</loc>
-    
-    <lastmod>2018-07-07T14:59:19.393Z</lastmod>
     
   </url>
   

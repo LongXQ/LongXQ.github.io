@@ -2,6 +2,7 @@
 <p><img src="/images/byteorder.png" alt="2个字节的整数小端和大端字节序存储">  </p>
 <p>我们把某个给定系统所用的字节序成为主机字节序(host byte<br>order)。对于不同的系统来说，他们的字节序都有可能不同。网络传输数据的时候，也必须指定一个字节序，网络传输采用大端字节序来传送数据。所以在主机和网络中交换数据要进行字节序的转换。<br>在linux系统中定义了一系列函数用来在网络和主机之间的字节序的转换函数。  </p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;netinet/in.h&gt;  </span></span></span><br><span class="line"><span class="keyword">uint16_t</span> htons(<span class="keyword">uint16_t</span> hostshort);  </span><br><span class="line"><span class="keyword">uint32_t</span> htonl(<span class="keyword">uint32_t</span> hostlong);  </span><br><span class="line"><span class="keyword">uint16_t</span> ntohs(<span class="keyword">uint16_t</span> netshort);  </span><br><span class="line"><span class="keyword">uint32_t</span> ntohl(<span class="keyword">uint32_t</span> netlong);</span><br></pre></td></tr></table></figure>
+<a id="more"></a>
 <p>在这些函数的名字中，h代表host，n代表network，s代表short，l代表long。</p>
 <p>下面这个函数可用来检测你的主机是什么主机字节序的。  </p>
 <pre><code class="c"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdio.h&gt;  </span></span>

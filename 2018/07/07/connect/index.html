@@ -5,7 +5,7 @@
 </ol>
 <p>但是我们要需要特别注意的是：<br>当一个TCP成功建立，并且对端已经发送了一些数据来的时候也会使得非阻塞套接字变得可读可写。非阻塞套接字连接出错也会使得套接字变得可读可写。所以当一个非阻塞TCP套接字变得可读可写的时候，我们需要通过调用getsockopt获取SO_ERROR的值来检查套接字上是否存在待处理错误来处理这种情形。<br>除了调用getsockopt来获取套接字的错误可以判断套接字是否建立成功，还可以用如下方法； </p>
 <p><img src="/images/connect.png" alt="其他方法判定非阻塞connect连接成功"></p>
-</div></article></div></main><footer><div class="paginator"><a href="/2018/07/07/tcpwait/" class="prev">PREV</a><a href="/2018/07/07/ipv4ipv6/" class="next">NEXT</a></div><div id="disqus_thread"></div><script>var disqus_shortname = 'longxq-github-io';
+<a id="more"></a></div></article></div></main><footer><div class="paginator"><a href="/2018/07/07/tcpwait/" class="prev">PREV</a><a href="/2018/07/07/ipv4ipv6/" class="next">NEXT</a></div><div id="disqus_thread"></div><script>var disqus_shortname = 'longxq-github-io';
 var disqus_identifier = '2018/07/07/connect/';
 var disqus_title = '非阻塞connect';
 var disqus_url = 'https://longxq.github.io/2018/07/07/connect/';

@@ -7,6 +7,7 @@
 <li>fired是就绪事件数组，当前就绪的事件组成的一个数组  </li>
 </ul>
 <p>初始完aeEventLoop实例后，在创建一个<code>aeApiState</code>结构实例。</p>
+<a id="more"></a>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">aeApiState</span>&#123;</span>  </span><br><span class="line">    	<span class="keyword">int</span> epfd;  </span><br><span class="line">    	<span class="class"><span class="keyword">struct</span> <span class="title">epoll_event</span> *<span class="title">events</span>;</span>  </span><br><span class="line">    &#125;aeApiState;  </span><br><span class="line">```     </span><br><span class="line"></span><br><span class="line">初始化一个epoll，得到的epoll描述符赋值给aeApiState实例的epfd字段。  </span><br><span class="line"></span><br><span class="line">```c</span><br><span class="line">    epfd= epoll_create(<span class="number">1024</span>)</span><br></pre></td></tr></table></figure>
 <p>可以看到，这样aeEventLoop就和epoll关联起来了。  </p>
 <p><img src="/images/aeEventLoop.png" alt="eventLoop"> </p>

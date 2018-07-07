@@ -2,65 +2,107 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
-    <loc>https://longxq.github.io/2018/07/07/socketreadwrite/</loc>
-    
-    <lastmod>2018-07-07T14:47:47.038Z</lastmod>
-    
-  </url>
-  
-  <url>
     <loc>https://longxq.github.io/2018/07/07/tcpwait/</loc>
     
-    <lastmod>2018-07-07T14:46:14.193Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>https://longxq.github.io/2018/07/07/connect/</loc>
-    
-    <lastmod>2018-07-07T14:44:15.513Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>https://longxq.github.io/2018/07/07/ipv4ipv6/</loc>
-    
-    <lastmod>2018-07-07T14:43:22.687Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>https://longxq.github.io/2018/07/07/bigend/</loc>
-    
-    <lastmod>2018-07-07T14:42:17.865Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>https://longxq.github.io/2018/07/07/tcpconnect/</loc>
-    
-    <lastmod>2018-07-07T14:40:33.477Z</lastmod>
+    <lastmod>2018-07-07T14:59:40.902Z</lastmod>
     
   </url>
   
   <url>
     <loc>https://longxq.github.io/2018/07/07/tcpnagl/</loc>
     
-    <lastmod>2018-07-07T14:39:12.201Z</lastmod>
+    <lastmod>2018-07-07T14:59:31.411Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/tcpconnect/</loc>
+    
+    <lastmod>2018-07-07T14:59:24.037Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/socketreadwrite/</loc>
+    
+    <lastmod>2018-07-07T14:59:19.393Z</lastmod>
     
   </url>
   
   <url>
     <loc>https://longxq.github.io/2018/07/07/sigpipe/</loc>
     
-    <lastmod>2018-07-07T14:36:25.659Z</lastmod>
+    <lastmod>2018-07-07T14:59:14.285Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/signal/</loc>
+    
+    <lastmod>2018-07-07T14:59:06.299Z</lastmod>
     
   </url>
   
   <url>
     <loc>https://longxq.github.io/2018/07/07/redisevent/</loc>
     
-    <lastmod>2018-07-07T14:35:22.899Z</lastmod>
+    <lastmod>2018-07-07T14:59:00.917Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/redis_intset/</loc>
+    
+    <lastmod>2018-07-07T14:58:43.578Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/redis_dict/</loc>
+    
+    <lastmod>2018-07-07T14:58:34.512Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/processcontrol/</loc>
+    
+    <lastmod>2018-07-07T14:58:15.380Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/pid/</loc>
+    
+    <lastmod>2018-07-07T14:57:59.553Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/ipv4ipv6/</loc>
+    
+    <lastmod>2018-07-07T14:57:46.060Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/connect/</loc>
+    
+    <lastmod>2018-07-07T14:57:25.281Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/bigend/</loc>
+    
+    <lastmod>2018-07-07T14:57:11.197Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://longxq.github.io/2018/07/07/cexception/</loc>
+    
+    <lastmod>2018-07-07T14:56:43.025Z</lastmod>
     
   </url>
   
@@ -75,20 +117,6 @@
     <loc>https://longxq.github.io/2018/07/07/redisdb/</loc>
     
     <lastmod>2018-07-07T14:24:29.065Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>https://longxq.github.io/2018/07/07/redis_intset/</loc>
-    
-    <lastmod>2018-07-07T14:22:45.695Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>https://longxq.github.io/2018/07/07/redis_dict/</loc>
-    
-    <lastmod>2018-07-07T14:20:22.919Z</lastmod>
     
   </url>
   

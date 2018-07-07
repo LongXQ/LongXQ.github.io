@@ -2,9 +2,16 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://longxq.github.io/2018/07/07/ziplist/</loc>
+    
+    <lastmod>2018-07-07T14:13:10.155Z</lastmod>
+    
+  </url>
+  
+  <url>
     <loc>https://longxq.github.io/2018/07/07/redis2/</loc>
     
-    <lastmod>2018-07-07T14:04:55.493Z</lastmod>
+    <lastmod>2018-07-07T14:07:53.772Z</lastmod>
     
   </url>
   

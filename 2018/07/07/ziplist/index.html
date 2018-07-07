@@ -1,0 +1,47 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> Redis ziplist实现 · oooo</title><meta name="description" content="Redis ziplist实现 - 龙雄球"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="https://longxq.github.io/atom.xml" title="oooo"></head><body><div class="wrap"><header><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">BLOG</a></li><li class="nav-list-item"><a href="/archives/" target="_self" class="nav-list-link">ARCHIVE</a></li><li class="nav-list-item"><a href="https://github.com/LongXQ" target="_blank" class="nav-list-link">GITHUB</a></li><li class="nav-list-item"><a href="/atom.xm" target="_self" class="nav-list-link">RSS</a></li></ul></header><main class="container"><div class="post"><article class="post-block"><h1 class="post-title">Redis ziplist实现</h1><div class="post-info">Jul 7, 2018</div><div class="post-content"><p>ziplist结构是Redis内部用来实现REDIS_ENCODING_ZIPLIST对象编码的。</p>
+<h3 id="ziplist结构分析"><a href="#ziplist结构分析" class="headerlink" title="ziplist结构分析"></a>ziplist结构分析</h3><p>首先我们从总体上来看下ziplist结构的总体布局:</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">zlbytes</span>&gt;</span><span class="tag">&lt;<span class="name">zltail</span>&gt;</span><span class="tag">&lt;<span class="name">zllen</span>&gt;</span><span class="tag">&lt;<span class="name">entry</span>&gt;</span><span class="tag">&lt;<span class="name">entry</span>&gt;</span>...<span class="tag">&lt;<span class="name">entry</span>&gt;</span><span class="tag">&lt;<span class="name">zlend</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>接着看看ziplist中每一个部分的作用.</p>
+<h3 id="ziplist的头部"><a href="#ziplist的头部" class="headerlink" title="ziplist的头部"></a>ziplist的头部</h3><pre><code class="html"><span class="tag">&lt;<span class="name">zlbytes</span>&gt;</span><span class="tag">&lt;<span class="name">zltail</span>&gt;</span><span class="tag">&lt;<span class="name">zllen</span>&gt;</span>  
+</code></pre>
+<p>一起组成了ziplist的头部部分。这三部分描述了一个ziplist结构的总体信息:</p>
+<ol>
+<li><code>&lt;zlbytes&gt;</code>是一个unsigned integer，表示ziplist所占用的字节数大小。</li>
+<li><code>&lt;zltail&gt;</code>表示到最后一个entry的字节偏移量。有了这个字段我们就能很快定位到最后一个entry</li>
+<li><code>&lt;zllen&gt;</code>代表了当前ziplist中有多少个entry。</li>
+</ol>
+<h3 id="lt-entry-gt-部分"><a href="#lt-entry-gt-部分" class="headerlink" title="&lt;entry&gt;部分"></a><code>&lt;entry&gt;</code>部分</h3><p>一个<code>&lt;entry&gt;</code>就代表了ziplist中的一个元素。如果一个ziplist中没有一个元素，说明此时ziplist是一个空的，不存在任何数据。大于等于0个<code>&lt;entry&gt;</code>构成了ziplist的主体部分。下面来看看<code>&lt;entry&gt;</code>结构是个什么样子。<br>特别注意的是<code>&lt;entry&gt;</code>的大小不是固定不变的，不同的<code>&lt;entry&gt;</code>它的大小有可能是不一样的。下面是<code>&lt;entry&gt;</code>的结构:  </p>
+<p><img src="/images/ZiplistEntry.png" alt="entry结构"> </p>
+<p>首先<code>&lt;entry&gt;</code>的header中的第一部分表示前一个的大小。这一部分的长度不是固定的，根据前一个<code>&lt;entry&gt;</code>的大小的不同而不同:</p>
+<ol>
+<li>如果前一个<code>&lt;entry&gt;</code>的大小小于254字节，那么这一部分就占用一个字节的大小来表示前一个<code>&lt;entry&gt;</code>的大小</li>
+<li>如果前一个<code>&lt;entry&gt;</code>的大小大于或者等于254个字节，那么这一部分就占用5个字节来表示前一个<code>&lt;entry&gt;</code>的大小。其中第一个字节被设置成254，用来表明接下来要用4个字节来表达前一个<code>&lt;entry&gt;</code>的大小。</li>
+</ol>
+<p>在来看看<code>&lt;entry&gt;</code>的header中第二部分。这一部分是<code>&lt;entry&gt;</code>的类型和大小编码。用来描述这个<code>&lt;entry&gt;</code>数据部分存储的是一串字符串还是一个整数，并描述了<code>&lt;entry&gt;</code>数据部分用来存储这些数据所占用的字节数大小。</p>
+<h3 id="当数据部分是一串字符串的时候"><a href="#当数据部分是一串字符串的时候" class="headerlink" title="当数据部分是一串字符串的时候"></a>当数据部分是一串字符串的时候</h3><ol>
+<li>|00pppppp| - 当数据部分是一串字符串且大小小于或等于63个字节的时候，该部分占用1一个字节。前2个比特位设置成00，后面的6个比特位用来描述数据部分的大小</li>
+<li>|01pppppp|qqqqqqqq| - 当数据部分是一串字符串且大小小于或者等于16383字节(14个比特位表示)的时候，该部分占用2个字节的大小，前2个比特位被设置成01，后面的14个比特位描述数据部分的大小。</li>
+<li>|10 <strong>__</strong> |qqqqqqqq|rrrrrrrr|ssssssss|tttttttt| - 当数据部分是一串字符串的时候并且大小大于或者等于16384字节的时候，该部分占用5个字节大小，前2个比特位被设置成10，后4个字节用来描述数据部分的大小。</li>
+</ol>
+<h5 id="当数据部分是整数的时候"><a href="#当数据部分是整数的时候" class="headerlink" title="当数据部分是整数的时候"></a>当数据部分是整数的时候</h5><p>当数据部分是一个整数的时候，该部分只占用了1个字节的大小。其中前2个比特位被设置成11，表示<code>&lt;entry&gt;</code>的数据部分是一个整数。后6个比特位用来表示该整数占用的字节数。</p>
+<ol start="4">
+<li>|11000000| - 表明数据部分占用了2个字节，存储的是一个int16_t类型的整数</li>
+<li>|11010000| - 表明数据部分占用了4个字节，存储的是一个int32_t类型的整数</li>
+<li>|11100000| - 表明数据部分占用了8个字节，存储的是一个int64_t类型的整数</li>
+<li>|11110000| - 表明数据部分占用了3个字节，存储的是一个24比特位的整数</li>
+<li>|11111110| - 表明数据部分占用了1个字节，存储的是8比特位的整数</li>
+<li>|1111xxxx| - 此时该<code>&lt;entry&gt;</code>无数据部分。当存储的整数是0~12的时候，直接用该部分的后4个比特位来表示。因为后4个比特位不能为0000和1110和1111，所以xxxx能够表示的范围为0001~1101，也就是能够表示的整数位1~13，但是我们要表示的是整数范围是0~12，所以为了取得正确的值，记得要进行减一操作。</li>
+</ol>
+<h3 id="lt-zlend-gt"><a href="#lt-zlend-gt" class="headerlink" title="&lt;zlend&gt;"></a><code>&lt;zlend&gt;</code></h3><h2 id="lt-zlend-gt-是ziplist的尾部，它占用一个字节，被固定设置成255，用来表示该位置是ziplist的结束部分了。"><a href="#lt-zlend-gt-是ziplist的尾部，它占用一个字节，被固定设置成255，用来表示该位置是ziplist的结束部分了。" class="headerlink" title="&lt;zlend&gt;是ziplist的尾部，它占用一个字节，被固定设置成255，用来表示该位置是ziplist的结束部分了。"></a><code>&lt;zlend&gt;</code>是ziplist的尾部，它占用一个字节，被固定设置成255，用来表示该位置是ziplist的结束部分了。</h2><h3 id="Redis-list类型"><a href="#Redis-list类型" class="headerlink" title="Redis list类型"></a>Redis list类型</h3><p>接下来我们看看Redis list类型的数据怎么用ziplist来实现REDIS_ENCODING_ZIPLIST对象编码的。<br>假如一个list对象由三个元素组成:valxxx…xxx56,valxxx…xxx256,10,65530。第一个元素是大小为56个字节的字符串，第二个元素是大小为256的字符串，第三个和第四个元素都是整数。我们看看怎么用REDIS_ENCODING_ZIPLIST对象编码来存储的。  </p>
+<p><img src="/images/REDIS_ENCODING_ZIPLIST.png" alt="REDIS_ENCODING_ZIPLIST">  </p>
+<p>再来看看一个完整的使用了REDIS_ENCODING_ZIPLIST对象编码的Redis list对象的结构:  </p>
+<p><img src="/images/redis_list_1.png" alt="REDIS_LIST"></p>
+</div></article></div></main><footer><div class="paginator"><a href="/2018/07/07/redis2/" class="next">NEXT</a></div><div id="disqus_thread"></div><script>var disqus_shortname = 'longxq-github-io';
+var disqus_identifier = '2018/07/07/ziplist/';
+var disqus_title = 'Redis ziplist实现';
+var disqus_url = 'https://longxq.github.io/2018/07/07/ziplist/';
+(function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><script id="dsq-count-scr" src="//longxq-github-io.disqus.com/count.js" async></script><div class="copyright"><p>© 2015 - 2018 <a href="https://longxq.github.io">龙雄球</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML" integrity="sha384-crwIf/BuaWM9rM65iM+dWFldgQ1Un8jWZMuh3puxb8TOY9+linwLoI7ZHZT+aekW" crossorigin="anonymous"></script></body></html>

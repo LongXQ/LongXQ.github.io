@@ -1,0 +1,35 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> 大端和小端字节序 · oooo</title><meta name="description" content="大端和小端字节序 - 龙雄球"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="https://longxq.github.io/atom.xml" title="oooo"></head><body><div class="wrap"><header><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">BLOG</a></li><li class="nav-list-item"><a href="/archives/" target="_self" class="nav-list-link">ARCHIVE</a></li><li class="nav-list-item"><a href="https://github.com/LongXQ" target="_blank" class="nav-list-link">GITHUB</a></li><li class="nav-list-item"><a href="/atom.xm" target="_self" class="nav-list-link">RSS</a></li></ul></header><main class="container"><div class="post"><article class="post-block"><h1 class="post-title">大端和小端字节序</h1><div class="post-info">Jul 7, 2018</div><div class="post-content"><p>考虑存储一个2个字节的整数。内存中存储这两个字节有两种方法：一种是将低序字节存储在起始地址，这称为小端(litter-<br>endian)字节序；另一种方法是将高序字节存储在起始地址，这成为大端(big-endian)字节序。  </p>
+<p><img src="/images/byteorder.png" alt="2个字节的整数小端和大端字节序存储">  </p>
+<p>我们把某个给定系统所用的字节序成为主机字节序(host byte<br>order)。对于不同的系统来说，他们的字节序都有可能不同。网络传输数据的时候，也必须指定一个字节序，网络传输采用大端字节序来传送数据。所以在主机和网络中交换数据要进行字节序的转换。<br>在linux系统中定义了一系列函数用来在网络和主机之间的字节序的转换函数。  </p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;netinet/in.h&gt;  </span></span></span><br><span class="line"><span class="keyword">uint16_t</span> htons(<span class="keyword">uint16_t</span> hostshort);  </span><br><span class="line"><span class="keyword">uint32_t</span> htonl(<span class="keyword">uint32_t</span> hostlong);  </span><br><span class="line"><span class="keyword">uint16_t</span> ntohs(<span class="keyword">uint16_t</span> netshort);  </span><br><span class="line"><span class="keyword">uint32_t</span> ntohl(<span class="keyword">uint32_t</span> netlong);</span><br></pre></td></tr></table></figure>
+<p>在这些函数的名字中，h代表host，n代表network，s代表short，l代表long。</p>
+<p>下面这个函数可用来检测你的主机是什么主机字节序的。  </p>
+<pre><code class="c"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdio.h&gt;  </span></span>
+<span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc,<span class="keyword">char</span> **argv)</span></span>{  
+    <span class="keyword">union</span>{  
+        <span class="keyword">short</span> s;  
+        <span class="keyword">char</span> c[<span class="keyword">sizeof</span>(<span class="keyword">short</span>)];  
+    }un;  
+    un.s=<span class="number">0x0102</span>;  
+    <span class="keyword">if</span>(<span class="keyword">sizeof</span>(<span class="keyword">short</span>)==<span class="number">2</span>){  
+        <span class="keyword">if</span>(un.c[<span class="number">0</span>]==<span class="number">1</span> &amp;&amp; un.c[<span class="number">1</span>]==<span class="number">2</span>){  
+            <span class="built_in">printf</span>(<span class="string">"big-endian\n"</span>);  
+        }<span class="keyword">else</span> <span class="keyword">if</span>(un.c[<span class="number">0</span>]==<span class="number">2</span> &amp;&amp; un.c[<span class="number">1</span>]==<span class="number">1</span>){  
+            <span class="built_in">printf</span>(<span class="string">"little-endian\n"</span>);  
+        }<span class="keyword">else</span> {  
+            <span class="built_in">printf</span>(<span class="string">"unkown\n"</span>);  
+        }  
+    }<span class="keyword">else</span> {  
+        <span class="built_in">printf</span>(<span class="string">"sizeof(short)=%d : 请做相应的修改\n"</span>,<span class="keyword">sizeof</span>(<span class="keyword">short</span>));  
+    }  
+}  
+</code></pre>
+</div></article></div></main><footer><div class="paginator"><a href="/2018/07/07/ipv4ipv6/" class="prev">PREV</a><a href="/2018/07/07/tcpconnect/" class="next">NEXT</a></div><div id="disqus_thread"></div><script>var disqus_shortname = 'longxq-github-io';
+var disqus_identifier = '2018/07/07/bigend/';
+var disqus_title = '大端和小端字节序';
+var disqus_url = 'https://longxq.github.io/2018/07/07/bigend/';
+(function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><script id="dsq-count-scr" src="//longxq-github-io.disqus.com/count.js" async></script><div class="copyright"><p>© 2015 - 2018 <a href="https://longxq.github.io">龙雄球</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML" integrity="sha384-crwIf/BuaWM9rM65iM+dWFldgQ1Un8jWZMuh3puxb8TOY9+linwLoI7ZHZT+aekW" crossorigin="anonymous"></script></body></html>

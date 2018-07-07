@@ -1,0 +1,16 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> 非阻塞connect · oooo</title><meta name="description" content="非阻塞connect - 龙雄球"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="https://longxq.github.io/atom.xml" title="oooo"></head><body><div class="wrap"><header><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">BLOG</a></li><li class="nav-list-item"><a href="/archives/" target="_self" class="nav-list-link">ARCHIVE</a></li><li class="nav-list-item"><a href="https://github.com/LongXQ" target="_blank" class="nav-list-link">GITHUB</a></li><li class="nav-list-item"><a href="/atom.xm" target="_self" class="nav-list-link">RSS</a></li></ul></header><main class="container"><div class="post"><article class="post-block"><h1 class="post-title">非阻塞connect</h1><div class="post-info">Jul 7, 2018</div><div class="post-content"><p>对一个非阻塞TCP套接字调用connect，那么这个connect就变成了非阻塞的connect。<br>当调用非阻塞connect，connect将立即返回一个EINPROGRESS错误，不过已经发起的TCP三鹿握手继续进行。这么做的好处首先就是在TCP三次握手阶段，进程不用一直阻塞在connect系统调用上，进程可以暂时做些其他事情，connect相当于发起了连接的作用。那么我们怎么知道TCP连接成功建立了呢？</p>
+<ol>
+<li>尽管TCP套接字是非阻塞的，如果连接到的服务器在同一主机上，那么当我们调用connect时，连接通常立刻建立。connect会返回0，表明连接立即建立成功了。</li>
+<li>对于连接不能立即建立的，我们可以在后续的过程通过一些I/O复用函数来知道连接是否成功还是出错了，如select，epoll。当连接成功建立时，描述符变为可写。当连接建立遇到错误时，描述符变为既可读又可写。 </li>
+</ol>
+<p>但是我们要需要特别注意的是：<br>当一个TCP成功建立，并且对端已经发送了一些数据来的时候也会使得非阻塞套接字变得可读可写。非阻塞套接字连接出错也会使得套接字变得可读可写。所以当一个非阻塞TCP套接字变得可读可写的时候，我们需要通过调用getsockopt获取SO_ERROR的值来检查套接字上是否存在待处理错误来处理这种情形。<br>除了调用getsockopt来获取套接字的错误可以判断套接字是否建立成功，还可以用如下方法； </p>
+<p><img src="/images/connect.png" alt="其他方法判定非阻塞connect连接成功"></p>
+</div></article></div></main><footer><div class="paginator"><a href="/2018/07/07/ipv4ipv6/" class="next">NEXT</a></div><div id="disqus_thread"></div><script>var disqus_shortname = 'longxq-github-io';
+var disqus_identifier = '2018/07/07/connect/';
+var disqus_title = '非阻塞connect';
+var disqus_url = 'https://longxq.github.io/2018/07/07/connect/';
+(function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><script id="dsq-count-scr" src="//longxq-github-io.disqus.com/count.js" async></script><div class="copyright"><p>© 2015 - 2018 <a href="https://longxq.github.io">龙雄球</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML" integrity="sha384-crwIf/BuaWM9rM65iM+dWFldgQ1Un8jWZMuh3puxb8TOY9+linwLoI7ZHZT+aekW" crossorigin="anonymous"></script></body></html>

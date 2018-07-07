@@ -6,7 +6,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="https://longxq.github.io/"/>
-  <updated>2018-07-07T14:24:29.065Z</updated>
+  <updated>2018-07-07T14:44:15.513Z</updated>
   <id>https://longxq.github.io/</id>
   
   <author>
@@ -15,6 +15,176 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>非阻塞connect</title>
+    <link href="https://longxq.github.io/2018/07/07/connect/"/>
+    <id>https://longxq.github.io/2018/07/07/connect/</id>
+    <published>2018-07-07T14:43:37.676Z</published>
+    <updated>2018-07-07T14:44:15.513Z</updated>
+    
+    <content type="html"><![CDATA[<p>对一个非阻塞TCP套接字调用connect，那么这个connect就变成了非阻塞的connect。<br>当调用非阻塞connect，connect将立即返回一个EINPROGRESS错误，不过已经发起的TCP三鹿握手继续进行。这么做的好处首先就是在TCP三次握手阶段，进程不用一直阻塞在connect系统调用上，进程可以暂时做些其他事情，connect相当于发起了连接的作用。那么我们怎么知道TCP连接成功建立了呢？</p><ol><li>尽管TCP套接字是非阻塞的，如果连接到的服务器在同一主机上，那么当我们调用connect时，连接通常立刻建立。connect会返回0，表明连接立即建立成功了。</li><li>对于连接不能立即建立的，我们可以在后续的过程通过一些I/O复用函数来知道连接是否成功还是出错了，如select，epoll。当连接成功建立时，描述符变为可写。当连接建立遇到错误时，描述符变为既可读又可写。 </li></ol><p>但是我们要需要特别注意的是：<br>当一个TCP成功建立，并且对端已经发送了一些数据来的时候也会使得非阻塞套接字变得可读可写。非阻塞套接字连接出错也会使得套接字变得可读可写。所以当一个非阻塞TCP套接字变得可读可写的时候，我们需要通过调用getsockopt获取SO_ERROR的值来检查套接字上是否存在待处理错误来处理这种情形。<br>除了调用getsockopt来获取套接字的错误可以判断套接字是否建立成功，还可以用如下方法； </p><p><img src="/images/connect.png" alt="其他方法判定非阻塞connect连接成功"></p>]]></content>
+    
+    <summary type="html">
+    
+      
+      
+        &lt;p&gt;对一个非阻塞TCP套接字调用connect，那么这个connect就变成了非阻塞的connect。&lt;br&gt;当调用非阻塞connect，connect将立即返回一个EINPROGRESS错误，不过已经发起的TCP三鹿握手继续进行。这么做的好处首先就是在TCP三次握手阶段，进程
+      
+    
+    </summary>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>ipv4ipv6</title>
+    <link href="https://longxq.github.io/2018/07/07/ipv4ipv6/"/>
+    <id>https://longxq.github.io/2018/07/07/ipv4ipv6/</id>
+    <published>2018-07-07T14:42:38.105Z</published>
+    <updated>2018-07-07T14:43:22.687Z</updated>
+    
+    <content type="html"><![CDATA[<p>下面成立的条件是主机是双栈主机，也就是同时支持IPv4协议和IPv6协议。<br>双栈主机上的IPv6服务器既能够服务于IPv4客户，又能够服务于IPv6客户。IPv4客户发送给这种服务器的仍然是IPv4数据报，不过服务器的协议栈会把客户主机的地址转换成一个IPv4的映射的IPv6地址，因此IPv6服务器仅仅处理IPv6套接字地址结构。<br>类似地，双栈主机上的IPv6客户能够和IPv4服务器通信。客户的解析器会把服务器主机所有的A记录作为IPv4映射的IPv6地址返回给客户，而客户指定这些地址之一调用connect将会使双栈发送一个IPv4<br>SYN分节。<br>IN6_IS_ADDR_V4MAPPED宏可用于判定对端是否在使用IPv4.</p><h3 id="IPv4客户与IPv6服务器"><a href="#IPv4客户与IPv6服务器" class="headerlink" title="IPv4客户与IPv6服务器"></a>IPv4客户与IPv6服务器</h3><p>其中的IPv6服务器主机是双栈主机。双栈主机的一个基本特性是其上的IPv6服务器既能处理IPv4客户，又能处理IPv6客户。这是通过使用IPv4映射的UPv6地址实现的。</p><ol><li>IPv6服务器启动后创建一个IPv6的监听套接字，假定服务器把通配地址绑定到该套接字上。</li><li>IPv4客户调用getaddrinfo函数获取IPv6服务器主机的信息。服务器既有A记录(IPv4类型的地址记录)又有AAAA记录(IPv6类型的地址记录)，但是IPv4客户只会用到查找到的A记录。</li><li>IPv4客户利用找到的服务器主机的A记录地址调用connect，发送IPv4 SYN到服务器主机。</li><li>服务器主机接收到这个目的地为IPv6监听套接字的IPv4 SYN，设置一个标志指示本连接应使用IPv4映射的IPv6地址，然后响应一个IPv4 SYN/ACK。该连接建立后，由accept返回给服务器的地址就是这个IPv4银蛇的IPv6地址。</li><li><p>以后客户主机和服务器主机都是通过IPv4数据报进行通信，底层由服务器主机的IP协议栈进行IPv4到IPv6地址映射转换。<br>可以看到上面的描述都是假设IPv6服务器必须是一个双栈主机：既有一个IPv4地址，又有一个IPv6地址。<br>大多数双栈主机在处理监听套接字时使用以下规则：</p></li><li><p>IPv4监听套接字只能接受来自IPv4客户的外来连接。</p></li><li>如果服务器有一个绑定了通配地址的IPv6监听套接字，而且该套接字未设置IPv6_V6ONLY套接字选项，那么该套接字既能接受来自IPv4客户的外来连接，又能接受来自IPv6客户的外来连接。</li><li>如果服务器有一个IPv6监听套接字，而且绑定在其上的是除IPv4映射的IPv6地址之外的某个非通配的IPv6地址，或者绑定在其上的是通配地址，不过还设置了IPv6_V6ONLY套接字选项，那么该套接字只能接受来自IPv6客户的外来连接。</li></ol><h3 id="IPv6客户与IPV4服务器"><a href="#IPv6客户与IPV4服务器" class="headerlink" title="IPv6客户与IPV4服务器"></a>IPv6客户与IPV4服务器</h3><p>对于这种情况，和上面的情况类似，只不过这里客户主机必须是双栈主机，而地址的转换也是在客户主机上IP协议栈负责的。</p>]]></content>
+    
+    <summary type="html">
+    
+      
+      
+        &lt;p&gt;下面成立的条件是主机是双栈主机，也就是同时支持IPv4协议和IPv6协议。&lt;br&gt;双栈主机上的IPv6服务器既能够服务于IPv4客户，又能够服务于IPv6客户。IPv4客户发送给这种服务器的仍然是IPv4数据报，不过服务器的协议栈会把客户主机的地址转换成一个IPv4的映射的
+      
+    
+    </summary>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>大端和小端字节序</title>
+    <link href="https://longxq.github.io/2018/07/07/bigend/"/>
+    <id>https://longxq.github.io/2018/07/07/bigend/</id>
+    <published>2018-07-07T14:41:20.839Z</published>
+    <updated>2018-07-07T14:42:17.865Z</updated>
+    
+    <content type="html"><![CDATA[<p>考虑存储一个2个字节的整数。内存中存储这两个字节有两种方法：一种是将低序字节存储在起始地址，这称为小端(litter-<br>endian)字节序；另一种方法是将高序字节存储在起始地址，这成为大端(big-endian)字节序。  </p><p><img src="/images/byteorder.png" alt="2个字节的整数小端和大端字节序存储">  </p><p>我们把某个给定系统所用的字节序成为主机字节序(host byte<br>order)。对于不同的系统来说，他们的字节序都有可能不同。网络传输数据的时候，也必须指定一个字节序，网络传输采用大端字节序来传送数据。所以在主机和网络中交换数据要进行字节序的转换。<br>在linux系统中定义了一系列函数用来在网络和主机之间的字节序的转换函数。  </p><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;netinet/in.h&gt;  </span></span></span><br><span class="line"><span class="keyword">uint16_t</span> htons(<span class="keyword">uint16_t</span> hostshort);  </span><br><span class="line"><span class="keyword">uint32_t</span> htonl(<span class="keyword">uint32_t</span> hostlong);  </span><br><span class="line"><span class="keyword">uint16_t</span> ntohs(<span class="keyword">uint16_t</span> netshort);  </span><br><span class="line"><span class="keyword">uint32_t</span> ntohl(<span class="keyword">uint32_t</span> netlong);</span><br></pre></td></tr></table></figure><p>在这些函数的名字中，h代表host，n代表network，s代表short，l代表long。</p><p>下面这个函数可用来检测你的主机是什么主机字节序的。  </p><pre><code class="c"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdio.h&gt;  </span></span><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc,<span class="keyword">char</span> **argv)</span></span>{      <span class="keyword">union</span>{          <span class="keyword">short</span> s;          <span class="keyword">char</span> c[<span class="keyword">sizeof</span>(<span class="keyword">short</span>)];      }un;      un.s=<span class="number">0x0102</span>;      <span class="keyword">if</span>(<span class="keyword">sizeof</span>(<span class="keyword">short</span>)==<span class="number">2</span>){          <span class="keyword">if</span>(un.c[<span class="number">0</span>]==<span class="number">1</span> &amp;&amp; un.c[<span class="number">1</span>]==<span class="number">2</span>){              <span class="built_in">printf</span>(<span class="string">"big-endian\n"</span>);          }<span class="keyword">else</span> <span class="keyword">if</span>(un.c[<span class="number">0</span>]==<span class="number">2</span> &amp;&amp; un.c[<span class="number">1</span>]==<span class="number">1</span>){              <span class="built_in">printf</span>(<span class="string">"little-endian\n"</span>);          }<span class="keyword">else</span> {              <span class="built_in">printf</span>(<span class="string">"unkown\n"</span>);          }      }<span class="keyword">else</span> {          <span class="built_in">printf</span>(<span class="string">"sizeof(short)=%d : 请做相应的修改\n"</span>,<span class="keyword">sizeof</span>(<span class="keyword">short</span>));      }  }  </code></pre>]]></content>
+    
+    <summary type="html">
+    
+      
+      
+        &lt;p&gt;考虑存储一个2个字节的整数。内存中存储这两个字节有两种方法：一种是将低序字节存储在起始地址，这称为小端(litter-&lt;br&gt;endian)字节序；另一种方法是将高序字节存储在起始地址，这成为大端(big-endian)字节序。  &lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;/im
+      
+    
+    </summary>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>TCP连接队列</title>
+    <link href="https://longxq.github.io/2018/07/07/tcpconnect/"/>
+    <id>https://longxq.github.io/2018/07/07/tcpconnect/</id>
+    <published>2018-07-07T14:39:45.451Z</published>
+    <updated>2018-07-07T14:40:33.477Z</updated>
+    
+    <content type="html"><![CDATA[<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">listen(fd,BACKLOG);</span><br></pre></td></tr></table></figure><p>listen函数建立了一个监听接口，其中BACKLOG参数指明了TCP已完成连接队列上的连接数。<br>监听接口一端中已完成连接队列上的连接是已被TCP接受的连接(三次握手成功，即TCP连接处于ESATABLISHED状态)，但还没有被应用层所接受(accept)。<br>特别注意的是TCP接受一个连接是将其放入已完成连接队列上，而应用层接受连接时将其从已完成连接队列中移出。<br>对于新的连接请求，该TCP监听接口的端点的连接队列中还要空间，则把完成的TCP连接放入该队列。<br>应用层调用accept函数从队列中获取成功连接的TCP连接，队列中以连接数目减一。<br>特别注意的是，当连接队列已满时，但是还有连接请求到达时，那么TCP是怎么处理的？<br>我在Linux机器上测试的结果是：当队列已满，但是还有新的连接请求到达时，TCP会自动把队列中的已完成的连接移出，空出空间来给新的连接。<br>最后要注意的是，实际中队列的长度等于BACKLOG的值加一，这可能是考虑了当BACKLOG为0的情况，也就是队列中能够容纳的连接数目至少为1.</p>]]></content>
+    
+    <summary type="html">
+    
+      
+      
+        &lt;figure class=&quot;highlight c&quot;&gt;&lt;table&gt;&lt;tr&gt;&lt;td class=&quot;gutter&quot;&gt;&lt;pre&gt;&lt;span class=&quot;line&quot;&gt;1&lt;/span&gt;&lt;br&gt;&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;code&quot;&gt;&lt;pre&gt;&lt;span class=&quot;
+      
+    
+    </summary>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>TCP经受时延的确认算法和Nagle算法</title>
+    <link href="https://longxq.github.io/2018/07/07/tcpnagl/"/>
+    <id>https://longxq.github.io/2018/07/07/tcpnagl/</id>
+    <published>2018-07-07T14:38:10.459Z</published>
+    <updated>2018-07-07T14:39:12.201Z</updated>
+    
+    <content type="html"><![CDATA[<p>TCP中这两个算法的目的都是为了减少在网络中的分组数目，减少网络的负载，特别是当小分组数目很多的时候。</p><h3 id="经受时延的确认"><a href="#经受时延的确认" class="headerlink" title="经受时延的确认"></a>经受时延的确认</h3><p>经受时延的确认(delayed<br>ACK)算法是当TCP在接收到数据的时候并不立即发送ACK确认给对端，相反，它推迟发送ACK，以便将ACK与要发送的数据一起发送给对端。当然这个推迟也不是无限推迟，在RFC中描述为推迟的时间一定要小于500ms。<br>这个算法的好处就是，当一方发送的分组都是一些小分组的时候，那么另一方就要频繁对小分组发送确认，而如果采用经受时延的确认，则确认就包含在了数据分组里面，减少了分组的数目。</p><h3 id="Nagle算法"><a href="#Nagle算法" class="headerlink" title="Nagle算法"></a>Nagle算法</h3><p>对于一些交互式的应用，经常发送一些只有一个或者几个字节的数据就要发送一个分组，那么一个分组中的有效数据就很少，更多的是一些额外的字节，如20字节的IP首部，20字节的TCP首部。这些额外的字节比有效的数据多得多，如果频繁发出这些小分组，那么很可能就会造成网络拥塞。一种简单和好的方法就是采用Nagle算法。<br>该算法要求一个TCP连接上最多只能有一个未被确认的未完成的小分组，在该分组的确认到达之前不能发送其他的小分组。相反，TCP会在确认到达之前，收集这期间要发送的少量的分组，并在确认到来时以一个分组的方式发送出去。<br>可以看到通过Nagle算法，可以节省很多网络带宽。特别是当确认到达的时间要很久的时候，说明这时候网络状况不是很好，而如果还继续频繁的发送小分组则更会造成网络拥塞，而如果采用Nagle算法，则可以收集小分组以一个大的分组形式一次发出，减少了要发送的分组的数量，节约了网络的带宽。</p><h3 id="TCP-NODELAY选项"><a href="#TCP-NODELAY选项" class="headerlink" title="TCP_NODELAY选项"></a>TCP_NODELAY选项</h3><p>我们经常在一些网络程序中看到这些代码:  </p><pre><code class="c"><span class="keyword">int</span> yes=<span class="number">1</span>;  setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&amp;yes,siezof(yes)); </code></pre><p>这是设置socket选项的函数。其中TCP_NODELAY的作用就是关闭Nagle算法。当Nagle算法和经时延的确认算法在一起工作的时候，就要出一些问题了，此时我们要关闭Nagle算法。<br>关闭Nagle算法的目的很明显就是要当有要发送的分组，不管分组是大还是小，应该立即发送出去，不管前面有没有未被确认的分组。<br>我们先看下当这两种算法同时作用的情况：  </p><p><img src="/images/nagle.png" alt="经时延的确认和Nagle算法">  </p><p>上面是一个client和server交互的情形，client发送数据给server，然后server并不马上发送确认回去，而是等待自己要有数据发送了在和确认一起发送给client(经时延的确认)。同时client端在等待第一个数据的确认的期间，也不发送数据给server(Nagle)，而是收集这些数据数据，直到收到确认后再一个大分组的形式发送给server，当然其中也包括了对server端数据的确认。<br>这看起来好像并没有什么问题，但是现实中兵不是所有的数据流都是这样的。在来看看下面这种client和server的交互数据流：  </p><p><img src="/images/nagle_2.png" alt="要关闭Nagle算法的情况"></p><p>从上面我们可以看到矛盾的地方：server端要求更多的数据才能工作，而client端由于Nagle算法的原因在没收到第一个数据的确认并不会马上发送数据给server，而此时server正在等待更多的数据，才会产生数据给client，所以第一个数据的确认只能等待超出经延迟确认算法的延迟时间后，才会发送给client。<br>所以可以看到当碰到这种交互的时候，会发生这种情况，server端等待进一步的数据到达才会产生数据，并和确认发送给client，而client由于Nagle算法，由于没有收到确认却迟迟不发送更多的数据给server。那么这样会造成client每次发送数据都要推迟经时延的确认算法规定的时延这么多时间才会发送出去。很明显这是不能忍受的，所以我们有时候要关闭Nagle算法，不必等候前一个分组的确认就把数据发送出去<br>。(把这种交互叫做Write-Write-Read模式，因为client至少发送两个分组数据才会从server端读一次数据)</p>]]></content>
+    
+    <summary type="html">
+    
+      
+      
+        &lt;p&gt;TCP中这两个算法的目的都是为了减少在网络中的分组数目，减少网络的负载，特别是当小分组数目很多的时候。&lt;/p&gt;
+&lt;h3 id=&quot;经受时延的确认&quot;&gt;&lt;a href=&quot;#经受时延的确认&quot; class=&quot;headerlink&quot; title=&quot;经受时延的确认&quot;&gt;&lt;/a&gt;经受时延的确
+      
+    
+    </summary>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>SIGPIPE信号</title>
+    <link href="https://longxq.github.io/2018/07/07/sigpipe/"/>
+    <id>https://longxq.github.io/2018/07/07/sigpipe/</id>
+    <published>2018-07-07T14:35:36.038Z</published>
+    <updated>2018-07-07T14:36:25.659Z</updated>
+    
+    <content type="html"><![CDATA[<p>当一个进程向某个已经收到RST的套接字执行写操作的时候，内核会向该进程发送一个SIGPIPE信号。该信号的默认行为是终止进程，因此进程必须捕获它以免不情愿地被终止，或者可以简单的忽略该信号：  </p><pre><code class="c">signal(SIGPIPE,SIG_IGN); </code></pre><p>我用一个服务器进程和一个客户端进程来测试SIGPIPE。首先我们在客户端掉用close，来执行关闭TCP的连接。然后再服务器进程向这个已经被客户端关闭的TCP连接上执行写操作。  </p><p><img src="/images/sigpipe.png" alt="SIGPIPE">  </p><p>我们在时间点1关闭了客户端的TCP连接，然后分别在时间点2和3在服务器端向客户端执行了写操作，然后触发了SIGPIPE信号，服务器进程退出。<br>按理来说两次写操作应该返回-<br>1才对，因为客户端已经关闭了TCP连接了，但是每次测试的时候都是不同的。有的时候是返回-1，有的时候确是返回要写入的字节数。下面我们来看看原因。  </p><p><img src="/images/sigpipe_2.png" alt="一次TCP关闭"></p><ol><li>第一次写返回-1的情况。第一次写返回-1的情况是写的时间在上图中的(2)处，可以看到在这个时间上，TCP连接已完全关闭，所以返回-1。但是TCP还是允许这次把数据发送出去，然后客户端因为TCP已经关闭了，返回RST报文给服务器。在服务器第二次写的时候，由于收到了RST，内核触发一个SIGPIPE信号给服务器进程。服务器进程终止。</li><li>第一次写返回要写入的字节数。这种情况是因为服务器执行写操作是的时间点发生在(0)处或者(1)处，可以看到，这时候服务器端要么不知道客户端要执行关闭操作了，要么就是TCP处于半关闭的状态。不管哪种情况服务器仍然可以向客户端写数据的，所以返回写入的字节数(注意这里的写入是写入了服务器进程成功写入发送缓冲区)，但是在数据真正发送给客户端前，TCP连接已经完全关闭，所以第一次写入到客户端的数据被客户端TCP接收后，客户端TCP返回RST给服务端。然后第二次写就会触发SIGPIPE信号。</li></ol>]]></content>
+    
+    <summary type="html">
+    
+      
+      
+        &lt;p&gt;当一个进程向某个已经收到RST的套接字执行写操作的时候，内核会向该进程发送一个SIGPIPE信号。该信号的默认行为是终止进程，因此进程必须捕获它以免不情愿地被终止，或者可以简单的忽略该信号：  &lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;c&quot;&gt;signal(SIGPIPE
+      
+    
+    </summary>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>Redis-事件处理实现</title>
+    <link href="https://longxq.github.io/2018/07/07/redisevent/"/>
+    <id>https://longxq.github.io/2018/07/07/redisevent/</id>
+    <published>2018-07-07T14:32:32.547Z</published>
+    <updated>2018-07-07T14:35:22.899Z</updated>
+    
+    <content type="html"><![CDATA[<p>Redis的事件处理框架底层的实现是对epoll，kqueue，select的包装。以epoll为例来讲事件框架的实现，其他实现类似。在Redis服务器启动伊始，会创建一个<code>aeEventLoop</code>结构实例。  </p><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">aeEventLoop</span>&#123;</span>  </span><br><span class="line">    <span class="keyword">int</span> maxfd;   <span class="comment">/* highest file descriptor currently registered */</span>  </span><br><span class="line">    <span class="keyword">int</span> setsize; <span class="comment">/* max number of file descriptors tracked */</span>  </span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> timeEventNextId;  </span><br><span class="line">    <span class="keyword">time_t</span> lastTime;     <span class="comment">/* Used to detect system clock skew */</span>  </span><br><span class="line">    aeFileEvent *events; <span class="comment">/* Registered events */</span>  </span><br><span class="line">    aeFiredEvent *fired; <span class="comment">/* Fired events */</span>  </span><br><span class="line">    aeTimeEvent *timeEventHead;  </span><br><span class="line">    <span class="keyword">int</span> stop;  </span><br><span class="line">    <span class="keyword">void</span> *apidata; <span class="comment">/* This is used for polling API specific data */</span>  </span><br><span class="line">    aeBeforeSleepProc *beforesleep;  </span><br><span class="line">&#125; aeEventLoop;</span><br></pre></td></tr></table></figure><ul><li>maxfd表示目前注册的最大的文件描述符fd</li><li>setsize表示事件库支持的最大文件描述符个数</li><li>events是一个数组，当前注册的所有事件在里面</li><li>fired是就绪事件数组，当前就绪的事件组成的一个数组  </li></ul><p>初始完aeEventLoop实例后，在创建一个<code>aeApiState</code>结构实例。</p><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">aeApiState</span>&#123;</span>  </span><br><span class="line">    <span class="keyword">int</span> epfd;  </span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">epoll_event</span> *<span class="title">events</span>;</span>  </span><br><span class="line">    &#125;aeApiState;  </span><br><span class="line">```     </span><br><span class="line"></span><br><span class="line">初始化一个epoll，得到的epoll描述符赋值给aeApiState实例的epfd字段。  </span><br><span class="line"></span><br><span class="line">```c</span><br><span class="line">    epfd= epoll_create(<span class="number">1024</span>)</span><br></pre></td></tr></table></figure><p>可以看到，这样aeEventLoop就和epoll关联起来了。  </p><p><img src="/images/aeEventLoop.png" alt="eventLoop"> </p><p>当我们要注册一个文件读写事件时候，系统会创建一个<code>aeFileEvent</code>结构实例，代表该文件读写事件。  </p><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* File event structure */</span>  </span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">aeFileEvent</span> &#123;</span>  </span><br><span class="line">    <span class="keyword">int</span> mask; <span class="comment">/* 事件掩码，表明注册的是文件读事件还是写事件，还是二者都有 */</span>  </span><br><span class="line">    aeFileProc *rfileProc; <span class="comment">/* 读事件处理函数 */</span>  </span><br><span class="line">    aeFileProc *wfileProc; <span class="comment">/* 写事件处理函数 */</span>  </span><br><span class="line">    <span class="keyword">void</span> *clientData;  </span><br><span class="line">&#125; aeFileEvent;</span><br></pre></td></tr></table></figure><p>然后根据文件描述符fd添加到aeEventLoop实例中的events数组中去，假设这里的fd为3，也就是events[3]。</p><p><img src="/images/aeFileEvent.png" alt="aeFileEvent">  </p><p>接着把该fd和fd的事件注册到epoll中去。  </p><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//添加事件到epoll实例中去  </span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">aeApiAddEvent</span><span class="params">(aeEventLoop *eventLoop, <span class="keyword">int</span> fd, <span class="keyword">int</span> mask)</span> </span>&#123;  </span><br><span class="line">    aeApiState *state = eventLoop-&gt;apidata;  </span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">epoll_event</span> <span class="title">ee</span>;</span>  </span><br><span class="line">    <span class="keyword">int</span> op = eventLoop-&gt;events[fd].mask == AE_NONE ?  </span><br><span class="line">            EPOLL_CTL_ADD : EPOLL_CTL_MOD;  </span><br><span class="line">    ee.events = <span class="number">0</span>;  </span><br><span class="line">    mask |= eventLoop-&gt;events[fd].mask;   </span><br><span class="line">    <span class="keyword">if</span> (mask &amp; AE_READABLE) ee.events |= EPOLLIN; <span class="comment">/* 添加读事件 */</span>  </span><br><span class="line">    <span class="keyword">if</span> (mask &amp; AE_WRITABLE) ee.events |= EPOLLOUT; <span class="comment">/* 添加写事件 */</span>  </span><br><span class="line">    ee.data.u64 = <span class="number">0</span>;   </span><br><span class="line">    ee.data.fd = fd;  </span><br><span class="line">    <span class="keyword">if</span> (epoll_ctl(state-&gt;epfd,op,fd,&amp;ee) == <span class="number">-1</span>) <span class="keyword">return</span> <span class="number">-1</span>; <span class="comment">/* 注册到epoll中去 */</span>  </span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure><p>然后就是调用aeApiPoll函数等待事件的发生  </p><pre><code class="c"><span class="comment">//等待epoll实例中相关fd的事件发生，返回就绪的事件个数  </span><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">aeApiPoll</span><span class="params">(aeEventLoop *eventLoop, struct timeval *tvp)</span> </span>{      aeApiState *state = eventLoop-&gt;apidata;      <span class="keyword">int</span> retval, numevents = <span class="number">0</span>;      retval = epoll_wait(state-&gt;epfd,state-&gt;events,eventLoop-&gt;setsize,              tvp ? (tvp-&gt;tv_sec*<span class="number">1000</span> + tvp-&gt;tv_usec/<span class="number">1000</span>) : <span class="number">-1</span>);      <span class="keyword">if</span> (retval &gt; <span class="number">0</span>) {          当检测到有事件发生的时候，发生的事件会在state-&gt;events数组中，state-&gt;events是epoll_event结构。以前面注册的fd为<span class="number">3</span>的文件事件为例，当该fd的事件发生的时候，比如可读了或者可写了，epoll_wait便会初始化state-&gt;events[<span class="number">3</span>]结构：state-&gt;events[<span class="number">3</span>]-&gt;events=EPOLLI或者EPOLLOUT或者二者都有；state-&gt;events[<span class="number">3</span>]-&gt;data-&gt;fd=<span class="number">3</span>;          接着会传递就绪事件到高层中去，也就是aeEventLoop中去，添加到对应的fired[<span class="number">3</span>]数组中。      }      <span class="keyword">return</span> numevents;  }  </code></pre><p>下面是<code>aeFiredEvent</code>结构：  </p><pre><code class="c"><span class="comment">/* A fired event */</span>  <span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">aeFiredEvent</span> {</span>      <span class="keyword">int</span> fd;      <span class="keyword">int</span> mask;  } aeFiredEvent;  </code></pre><p>mask表示对应的就绪事件，fd为就绪事件对应的文件描述符  </p><p><img src="/images/aeEventLoop_1.png" alt="aeEventLoop"> </p><p>这样当调用aeApiPoll函数后，就知道有哪些就绪事件可以处理了，就绪事件都存在aeEventLoop实例中的fired数组中，接下来就是一一处理fired数组中的时间了，调用注册时的注册的事件处理函数。<br>当处理完这一次调用aeApiPoll得到的事件后，Redis服务器又开始新一轮的循环，接着调用aeApiPoll函数开启下一轮事件处理。<br>至于时间事件处理基本和文件事件处理一样的。<br>下面画出了Redis服务器的事件处理流程图  </p><p><img src="/images/aeEventLoop_2.png" alt="Redis 事件处理流程图"></p>]]></content>
+    
+    <summary type="html">
+    
+      
+      
+        &lt;p&gt;Redis的事件处理框架底层的实现是对epoll，kqueue，select的包装。以epoll为例来讲事件框架的实现，其他实现类似。在Redis服务器启动伊始，会创建一个&lt;code&gt;aeEventLoop&lt;/code&gt;结构实例。  &lt;/p&gt;
+&lt;figure class=&quot;
+      
+    
+    </summary>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>fcntl ioctl setsockopt使用说明</title>
+    <link href="https://longxq.github.io/2018/07/07/fcntl/"/>
+    <id>https://longxq.github.io/2018/07/07/fcntl/</id>
+    <published>2018-07-07T14:29:19.469Z</published>
+    <updated>2018-07-07T14:32:09.556Z</updated>
+    
+    <content type="html"><![CDATA[<p>写程序的时候经常搞不清fcntl，ioctl和setsockopt的区别，而且其中每一个函数的参数也是这么多，所以作下笔记给以后写程序的时候参考参考。<br>我们都知道Linux(unix)中所有的东西都是文件，Linux把大部分东西都虚拟成了一个文件，也就是平常我们写程序一般都是基于在VFS(虚拟文件系统)之上的。通过VFS和硬件打交道。  </p><p><img src="/images/VFS.png" alt="VFS模型"></p><a id="more"></a><h3 id="fcntl函数"><a href="#fcntl函数" class="headerlink" title="fcntl函数"></a>fcntl函数</h3><p>fcntl函数作用在VFS层，它控制文件系统的一些参数，如文件访描述符标志，文件状态标志等。<br> <strong>F_GETFD</strong><br>读取文件描述符标志<br> <strong>F_SETFD</strong><br>设置文件描述符标志<br>现阶段指支持这一个标志:FD_CLOEXEC(close-on-<br>exec)，这个标志的作用是在执行exec的时候在子进程中关闭设置了FD_CLOEXEC的fd，这个标志也可以在open函数在打开一个文件的时候使用O_CLOEXEC。<br> <strong>F_GETFL</strong><br>读取文件访问权限和文件状态标志。<br> <strong>F_SETFL</strong><br>虽然F_GETFL能够读取到文件的访问权限，但是不能用fcntl设置他们。<br><strong>O_APPEND</strong> 设置文件追加到文件末尾标志<br><strong>O_ASYNC</strong> 当文件能够读或者写的时候可以发送信号(SIGIO)。这个特性仅仅对终端，伪终端，sockets和pipes和FIFOs有用。<br><strong>O_DIRECT</strong> 直接从设备中读写<br><strong>O_NOATIME</strong> 不更新文件最后一次访问时间(inode中的st_atime属性)<br><strong>O_NONBLOCK</strong> 设置文件为非阻塞标志</p><h3 id="ioctl函数"><a href="#ioctl函数" class="headerlink" title="ioctl函数"></a>ioctl函数</h3><p>ioctl则是直接控制一些IO设备的一些属性，对设备的一些特性进行控制。如终端设备的波特率这些。ioctl和设备关系密切，所以再次就不一一列举控制参数了。一个fd能够被ioctl操作前提是fd对应的设备在驱动程序中实现了ioctl函数。</p><h3 id="setsockopt函数"><a href="#setsockopt函数" class="headerlink" title="setsockopt函数"></a>setsockopt函数</h3><p>setsockopt函数则是专门控制socket的一些参数。它指定了在不同的level上面设置参数。<br><strong>SOL_SOCKET</strong> sockets API level<br>SO_KEEPALIVE设置TCP的keep alive选项，去探测失效的一端<br>SO_SNDBUF设置发送buffer<br>SO_SNDTIMEO、SO_RCVTIMEO发送或者接收超时时间，直到一个错误产生。<br>SO_REUSEADDR重用地址端口。当一个端口关闭时，这个socket处于TIME_WAIT状态，假如我们在新建一个socket，但是又绑定处于TIME-<br>WAIT状态的端口，则会出错，但是如果设置了这个选项，则不会出错了。<br>SO_BROADCAST<br>设置broadcast标志。UDP socket能够发送数据给broadcast地址，对TCP socket无效。<br>SO_ERROR<br>得到和清除pending socket error。<br>SO_RCVBUF<br>设置或得到socket接收buffer<br> <strong>IPPROTO_TCP</strong><br>TCP_KEEPIDLE<br>如果在设置的时间内没有响应则发送心跳包检测<br>TCP_KEEPINTVL<br>设置发送心跳包的时间间隔<br>TCP_KEEPCNT<br>设置发送心跳包的次数<br>TCP_NODELAY<br>禁用TCP协议中的Nagle算法</p>]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;写程序的时候经常搞不清fcntl，ioctl和setsockopt的区别，而且其中每一个函数的参数也是这么多，所以作下笔记给以后写程序的时候参考参考。&lt;br&gt;我们都知道Linux(unix)中所有的东西都是文件，Linux把大部分东西都虚拟成了一个文件，也就是平常我们写程序一般都是基于在VFS(虚拟文件系统)之上的。通过VFS和硬件打交道。  &lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;/images/VFS.png&quot; alt=&quot;VFS模型&quot;&gt;&lt;/p&gt;
+    
+    </summary>
+    
+    
+  </entry>
   
   <entry>
     <title>redisDB数据库实现</title>

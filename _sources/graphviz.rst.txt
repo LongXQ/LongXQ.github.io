@@ -1,0 +1,128 @@
+graphviz
+==========
+
+graphviz是一个使用
+`dot语言 <https://graphviz.gitlab.io/_pages/doc/info/lang.html>`_
+绘制图形软件，非常适合程序员使用，所想即所得。
+
+有向图
+----------
+
+::
+
+      digraph foo {
+            A -> B;
+      }
+
+foo是图的名字，A和B表示节点，-->是边操作符，表示该边由节点A指向节点B。
+
+.. graphviz::
+
+   digraph foo {
+      A -> B;
+   }
+
+无向图
+----------
+
+::
+
+      graph foo {
+            A -- B;
+      }
+
+.. graphviz::
+
+   graph foo {
+      A -- B;
+   }
+
+可以看到边操作符是 \-\- ，没有方向。
+
+节点和边
+------------
+
+::
+
+      digraph foo {
+            A
+            B
+            C
+            A -> B
+      }
+
+A、B、C表示节点，A \-> B表示边，如果简单的话，单独定义节点的语句可以像前面的例子中省掉。
+
+.. graphviz::
+
+      digraph foo {
+            A
+            B
+            C
+            A -> B
+      }
+
+属性
+--------
+
+有图属性、节点属性、边属性。属性是一个attrname=value的形式，分别跟在对象后面。
+
+::
+
+      digraph foo {
+            A [shape=box]
+            B [shape=diamond]
+            C [shape=diamond]
+            A -> B [arrowhead=box]
+            A -> C [arrowhead=crow]
+      }
+
+定义了节点的形状和边的箭头的形状，完整的属性说明请参考
+`文档 <https://graphviz.gitlab.io/_pages/doc/info/attrs.html>`_。
+
+.. graphviz::
+
+      digraph foo {
+            A [shape=box]
+            B [shape=diamond]
+            C [shape=diamond]
+            A -> B [arrowhead=box]
+            A -> C [arrowhead=crow]
+      }
+
+子图
+--------
+
+::
+
+      digraph foo {
+            A -> {B C}
+      }
+
+B和C属于一个子图里的节点，A -> {B C}表示A分别指向了B和C。
+
+.. graphviz::
+
+      digraph foo {
+            A -> {B C}
+      }
+
+subgraph定义了一个子图，如果子图命名用cluter，则会用一个框把子图包起来。
+
+::
+
+      digraph foo {
+            subgraph clusterA {
+                  B -> C
+            }
+            A -> B
+      }
+
+.. graphviz::
+
+      digraph foo {
+            subgraph clusterA {
+                  B -> C
+            }
+            A -> B
+      }

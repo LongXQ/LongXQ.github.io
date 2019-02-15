@@ -1,10 +1,9 @@
-====================================
 rst示例
 ====================================
 
 
 段落
-=======
+-------
 
 ::
 
@@ -28,7 +27,7 @@ term (up to a line of text)
     段落中的缩进和换行是有意义的
 
 插入图片
-==========
+---------
 
 ::
 
@@ -51,7 +50,7 @@ term (up to a line of text)
    :align: right
 
 斜体字、加粗、引用
-===================
+--------------------
 
 ::
 
@@ -60,7 +59,7 @@ term (up to a line of text)
 *text* **text** ``text backquotes``
 
 列表
-=========
+---------
 
 ::
 
@@ -103,7 +102,7 @@ term (up to a line of text)
 * and here the parent list continues
 
 Line blocks
-===============
+-----------------
 
 ::
 
@@ -116,7 +115,7 @@ Line blocks
 | the source file.
 
 标题
-==========
+-----------
 
 ::
 
@@ -133,7 +132,7 @@ Line blocks
     ", for paragraphs
 
 文本块
-===========
+------------
 the special marker ::，文本块中的其他标记语义不会生效::
 
     This is a normal text paragraph. The next paragraph is a code sample::
@@ -155,7 +154,7 @@ This is a normal text paragraph. The next paragraph is a code sample::
 This is a normal text paragraph again.
 
 Doctest blocks
-=================
+--------------------
 
 | >>> 1 + 1
 | 2
@@ -164,7 +163,7 @@ Doctest blocks
 2
 
 外部链接
-=============
+-----------
 
 ::
 
@@ -184,7 +183,7 @@ Doctest blocks
 .. 百度: https://baidu.com
 
 footnote
-===============
+-------------
 
 ::
 
@@ -209,14 +208,14 @@ footnote 2.
 .. _my-reference-label:
 
 交叉引用
-===========
+-------------
 
 定义一个label，然后用\:ref\:\`label name\`来引用::
 
     .. _my-reference-label:
 
     交叉引用
-    ===========
+    -----------
 
     This is the text of the section.
 
@@ -229,7 +228,7 @@ This is the text of the section.
 It refers to the section itself, see :ref:`my-reference-label`.
 
 加粗斜体上标下标角色用法
-========================
+-------------------------
 ::
 
     :emphasis:`text` 
@@ -249,7 +248,7 @@ H\ :sub:`2`\ O
 E = mc\ :sup:`2`
 
 常用指令
-=============
+--------------
 
 ::
 

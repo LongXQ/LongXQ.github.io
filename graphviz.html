@@ -1,0 +1,207 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>graphviz &#8212; CC 0.1 文档</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script type="text/javascript" src="_static/translations.js"></script>
+    <link rel="index" title="索引" href="genindex.html" />
+    <link rel="search" title="搜索" href="search.html" />
+    <link rel="prev" title="rst示例" href="rst.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="graphviz">
+<h1>graphviz<a class="headerlink" href="#graphviz" title="永久链接至标题">¶</a></h1>
+<p>graphviz是一个使用
+<a class="reference external" href="https://graphviz.gitlab.io/_pages/doc/info/lang.html">dot语言</a>
+绘制图形软件，非常适合程序员使用，所想即所得。</p>
+<div class="section" id="id1">
+<h2>有向图<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">digraph</span> <span class="n">foo</span> <span class="p">{</span>
+      <span class="n">A</span> <span class="o">-&gt;</span> <span class="n">B</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>foo是图的名字，A和B表示节点，–&gt;是边操作符，表示该边由节点A指向节点B。</p>
+<div class="graphviz"><object data="_images/graphviz-c2fca639a9c164464aed74c8c3ad4133bb5e4c13.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph foo {
+   A -&gt; B;
+}</p></object></div>
+</div>
+<div class="section" id="id2">
+<h2>无向图<a class="headerlink" href="#id2" title="永久链接至标题">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">graph</span> <span class="n">foo</span> <span class="p">{</span>
+      <span class="n">A</span> <span class="o">--</span> <span class="n">B</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="graphviz"><object data="_images/graphviz-857499dbe968448e2521763462a99a8a045ca967.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">graph foo {
+   A -- B;
+}</p></object></div>
+<p>可以看到边操作符是 – ，没有方向。</p>
+</div>
+<div class="section" id="id3">
+<h2>节点和边<a class="headerlink" href="#id3" title="永久链接至标题">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">digraph</span> <span class="n">foo</span> <span class="p">{</span>
+      <span class="n">A</span>
+      <span class="n">B</span>
+      <span class="n">C</span>
+      <span class="n">A</span> <span class="o">-&gt;</span> <span class="n">B</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>A、B、C表示节点，A -&gt; B表示边，如果简单的话，单独定义节点的语句可以像前面的例子中省掉。</p>
+<div class="graphviz"><object data="_images/graphviz-da93d636cb43f30c227cbfcafad0030210e7bba8.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph foo {
+      A
+      B
+      C
+      A -&gt; B
+}</p></object></div>
+</div>
+<div class="section" id="id4">
+<h2>属性<a class="headerlink" href="#id4" title="永久链接至标题">¶</a></h2>
+<p>有图属性、节点属性、边属性。属性是一个attrname=value的形式，分别跟在对象后面。</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">digraph</span> <span class="n">foo</span> <span class="p">{</span>
+      <span class="n">A</span> <span class="p">[</span><span class="n">shape</span><span class="o">=</span><span class="n">box</span><span class="p">]</span>
+      <span class="n">B</span> <span class="p">[</span><span class="n">shape</span><span class="o">=</span><span class="n">diamond</span><span class="p">]</span>
+      <span class="n">C</span> <span class="p">[</span><span class="n">shape</span><span class="o">=</span><span class="n">diamond</span><span class="p">]</span>
+      <span class="n">A</span> <span class="o">-&gt;</span> <span class="n">B</span> <span class="p">[</span><span class="n">arrowhead</span><span class="o">=</span><span class="n">box</span><span class="p">]</span>
+      <span class="n">A</span> <span class="o">-&gt;</span> <span class="n">C</span> <span class="p">[</span><span class="n">arrowhead</span><span class="o">=</span><span class="n">crow</span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>定义了节点的形状和边的箭头的形状，完整的属性说明请参考
+<a class="reference external" href="https://graphviz.gitlab.io/_pages/doc/info/attrs.html">文档</a>。</p>
+<div class="graphviz"><object data="_images/graphviz-d58914076e0f8cca6a753ed6075055340693ac6d.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph foo {
+      A [shape=box]
+      B [shape=diamond]
+      C [shape=diamond]
+      A -&gt; B [arrowhead=box]
+      A -&gt; C [arrowhead=crow]
+}</p></object></div>
+</div>
+<div class="section" id="id6">
+<h2>子图<a class="headerlink" href="#id6" title="永久链接至标题">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">digraph</span> <span class="n">foo</span> <span class="p">{</span>
+      <span class="n">A</span> <span class="o">-&gt;</span> <span class="p">{</span><span class="n">B</span> <span class="n">C</span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>B和C属于一个子图里的节点，A -&gt; {B C}表示A分别指向了B和C。</p>
+<div class="graphviz"><object data="_images/graphviz-84cf7b3dce8c8661da50ede9f665af1d4563c58d.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph foo {
+      A -&gt; {B C}
+}</p></object></div>
+<p>subgraph定义了一个子图，如果子图命名用cluter，则会用一个框把子图包起来。</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">digraph</span> <span class="n">foo</span> <span class="p">{</span>
+      <span class="n">subgraph</span> <span class="n">clusterA</span> <span class="p">{</span>
+            <span class="n">B</span> <span class="o">-&gt;</span> <span class="n">C</span>
+      <span class="p">}</span>
+      <span class="n">A</span> <span class="o">-&gt;</span> <span class="n">B</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="graphviz"><object data="_images/graphviz-75e6e2ffc459446aa1200bb6a3422b07b30474ec.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph foo {
+      subgraph clusterA {
+            B -&gt; C
+      }
+      A -&gt; B
+}</p></object></div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">CC</a></h1>
+
+
+
+<p class="blurb">日常总结分享</p>
+
+
+
+
+
+
+<h3>导航</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="link.html">网络资源</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rst.html">rst示例</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">graphviz</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id1">有向图</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id2">无向图</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id3">节点和边</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id4">属性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id6">子图</a></li>
+</ul>
+</li>
+</ul>
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3>快速搜索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="转向" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, longxiongqiu.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/graphviz.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

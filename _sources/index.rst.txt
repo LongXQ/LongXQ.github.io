@@ -3,5 +3,8 @@
 
 .. toctree::
     :hidden:
+    :maxdepth: 6
 
+    link
     rst示例 <rst>
+    graphviz

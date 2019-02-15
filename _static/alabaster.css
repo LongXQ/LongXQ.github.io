@@ -4,7 +4,7 @@
 
 body {
     font-family: Georgia, serif;
-    font-size: 17px;
+    font-size: 14px;
     background-color: #fff;
     color: #000;
     margin: 0;
@@ -60,7 +60,7 @@ div.footer a {
 
 p.caption {
     font-family: inherit;
-    font-size: inherit;
+    font-size: 10px;
 }
 
 

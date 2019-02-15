@@ -1,5 +1,5 @@
-Welcome Pythonic!
-====================================
+CC Document
+==============
 
 .. toctree::
     :hidden:

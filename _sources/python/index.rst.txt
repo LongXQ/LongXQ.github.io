@@ -1,0 +1,8 @@
+python
+====================================
+
+.. toctree::
+    :glob:
+    :titlesonly:
+
+    doc/*

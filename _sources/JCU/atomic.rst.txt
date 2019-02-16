@@ -1,0 +1,120 @@
+原子操作：多处理器的支持
+==================================
+
+.. note::
+
+    不同语言提供的原子操作、或者基于原子操作更高层的一些高级并发结构都离不开硬件的支持
+
+.. graphviz::
+
+   digraph atomic1 {
+       A [label="线程1"]
+       B [label="线程2"]
+       C [shape = "record" label=" | ... | | <f1> a | | ... |" xlabel="内存"]
+       A -> C:f1 [label="a=1"]
+       B -> C:f1 [label="a=2"]
+   }
+
+在多处理器下，两个或多个线程可能在不同处理器上同时访问相同的内存地址，那么就会存在冲突。
+如上图所示，两个线程同时写a，那么a到底是1还是2。所以需要多处理器提供一些通信机制或者内存
+访问协议来保证数据的一致和正确。
+
+在x86处理器中，针对内存操作处理器支持被叫做
+**locked atomic operation**
+的原子操作，
+这些操作典型应用就是保护共享数据结构，处理器提供三种机制实现这些操作。
+
+1. Guarateed atomic operation
+2. Bus locking
+3. Cache coherency protocols
+
+Guarateed atomic operation
+------------------------------------
+
+现代x86处理器保证了下面的基础内存操作是原子的：
+    
+1. 读或写一个byte(1字节)
+2. 读或写一个16位对齐的word(2字节)
+3. 读或写一个32位对齐的doubleword(4字节)
+4. 读或写一个64位对齐的quadword(8字节)
+
+这些操作都是被处理器自动原子地执行的，所以叫
+**Guarateed atomic operation**。
+
+.. important::
+
+    对齐原因是数据总线能够在一个总线周期内访问到数据。如果没有对齐，可能一次访问需要多个周期。
+
+Bus locking
+----------------
+
+Intel 64和IA-32处理器提供了一个LOCK#信号用来锁住系统总线，当存在有竞争的内存操作的时候锁住总线。
+当总线被锁住了，其他处理器或其他总线总线设备的锁住总线请求就会被阻塞，通过锁住总线的
+方式对同一内存地址访问实现原子操作。
+
+Automatic Locking
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+1. 执行
+   **XCHG**
+   访存指令的时候
+2. 设置TSS描述符的B标志位的时候
+3. 更新段描述符的时候
+4. 更新页目录和页表项的时候
+5. 响应中断的时候
+
+以上操作都有LOCK语义，处理器自动锁总线，所以叫
+**Automatic Locking**。
+和我们编程相关的有XCHG指令，其他几项都是操作系统关心的。所以我们可以使用XCHG来实现原子操作。
+
+Software Controlled Bus Locking
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+除了硬件自动执行锁总线之外，软件在编写代码的时候可以显示的要求锁住总线。
+当程序访问内存的时候，可以在访存指令前面显示的加一个LOCK前缀来锁住总线，实现原子语义。
+
+1. 位测试和更改指令(
+   **BTS**, 
+   **BTR**, 
+   **BTC**)
+2. 交换指令(
+   **XADD**, 
+   **CMPXCHG**, 
+   **CMPXCHG8B**)
+3. LOCK前缀会自动加到
+   **XCHG**
+   指令上面
+4. 单操作数的算数和逻辑运算指令:
+   **INC**,
+   **DEC**,
+   **NOT**
+   和
+   **NEG**
+   指令
+5. 两个操作数的算数和逻辑运算指令:
+   **ADD**,
+   **ADC**,
+   **SUB**,
+   **SBB**,
+   **AND**,
+   **OR**
+   和
+   **XOR**
+   指令
+
+.. important::
+
+    Bus Locking对内存地址对齐没有要求，如果一个指令需要多个总线周期才能完成，也不影响原子性，
+    因为总线都被锁住了，所以对不对齐没有关系，处于对处理器执行性能的考虑，最好还是对齐。
+
+
+Cache coherency protocols
+-------------------------------
+
+Cache coherency protocols是缓存一致性协议，处理器使用缓存一致性协议保证了当处理器对内存进行写操作的时候，
+会刷新不同处理器上该内存位置的缓存，保证了不同处理器看到的数据是一致的，这往往是对编程来说是透明的。
+
+
+**参考资料**
+
+`Intel® 64 and IA-32 Architectures Software Developer's Manual Volume 3A: System Programming Guide, Part 1 <https://software.intel.com/en-us/download/intel-64-and-ia-32-architectures-sdm-volume-3a-system-programming-guide-part-1>`_

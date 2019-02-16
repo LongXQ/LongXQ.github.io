@@ -1,0 +1,222 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>原子操作：多处理器的支持 &#8212; CC 0.1 文档</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <script type="text/javascript" src="../_static/translations.js"></script>
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="next" title="rst示例" href="../rst.html" />
+    <link rel="prev" title="JCU" href="index.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="id1">
+<h1>原子操作：多处理器的支持<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h1>
+<div class="admonition note">
+<p class="first admonition-title">注解</p>
+<p class="last">不同语言提供的原子操作、或者基于原子操作更高层的一些高级并发结构都离不开硬件的支持</p>
+</div>
+<div class="graphviz"><object data="../_images/graphviz-0fc48292a9daa6bf8984e9b09c3041958a2bfa8a.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph atomic1 {
+    A [label=&quot;线程1&quot;]
+    B [label=&quot;线程2&quot;]
+    C [shape = &quot;record&quot; label=&quot; | ... | | &lt;f1&gt; a | | ... |&quot; xlabel=&quot;内存&quot;]
+    A -&gt; C:f1 [label=&quot;a=1&quot;]
+    B -&gt; C:f1 [label=&quot;a=2&quot;]
+}</p></object></div>
+<p>在多处理器下，两个或多个线程可能在不同处理器上同时访问相同的内存地址，那么就会存在冲突。
+如上图所示，两个线程同时写a，那么a到底是1还是2。所以需要多处理器提供一些通信机制或者内存
+访问协议来保证数据的一致和正确。</p>
+<p>在x86处理器中，针对内存操作处理器支持被叫做
+<strong>locked atomic operation</strong>
+的原子操作，
+这些操作典型应用就是保护共享数据结构，处理器提供三种机制实现这些操作。</p>
+<ol class="arabic simple">
+<li>Guarateed atomic operation</li>
+<li>Bus locking</li>
+<li>Cache coherency protocols</li>
+</ol>
+<div class="section" id="guarateed-atomic-operation">
+<h2>Guarateed atomic operation<a class="headerlink" href="#guarateed-atomic-operation" title="永久链接至标题">¶</a></h2>
+<p>现代x86处理器保证了下面的基础内存操作是原子的：</p>
+<ol class="arabic simple">
+<li>读或写一个byte(1字节)</li>
+<li>读或写一个16位对齐的word(2字节)</li>
+<li>读或写一个32位对齐的doubleword(4字节)</li>
+<li>读或写一个64位对齐的quadword(8字节)</li>
+</ol>
+<p>这些操作都是被处理器自动原子地执行的，所以叫
+<strong>Guarateed atomic operation</strong>。</p>
+<div class="admonition important">
+<p class="first admonition-title">重要</p>
+<p class="last">对齐原因是数据总线能够在一个总线周期内访问到数据。如果没有对齐，可能一次访问需要多个周期。</p>
+</div>
+</div>
+<div class="section" id="bus-locking">
+<h2>Bus locking<a class="headerlink" href="#bus-locking" title="永久链接至标题">¶</a></h2>
+<p>Intel 64和IA-32处理器提供了一个LOCK#信号用来锁住系统总线，当存在有竞争的内存操作的时候锁住总线。
+当总线被锁住了，其他处理器或其他总线总线设备的锁住总线请求就会被阻塞，通过锁住总线的
+方式对同一内存地址访问实现原子操作。</p>
+<div class="section" id="automatic-locking">
+<h3>Automatic Locking<a class="headerlink" href="#automatic-locking" title="永久链接至标题">¶</a></h3>
+<ol class="arabic simple">
+<li>执行
+<strong>XCHG</strong>
+访存指令的时候</li>
+<li>设置TSS描述符的B标志位的时候</li>
+<li>更新段描述符的时候</li>
+<li>更新页目录和页表项的时候</li>
+<li>响应中断的时候</li>
+</ol>
+<p>以上操作都有LOCK语义，处理器自动锁总线，所以叫
+<strong>Automatic Locking</strong>。
+和我们编程相关的有XCHG指令，其他几项都是操作系统关心的。所以我们可以使用XCHG来实现原子操作。</p>
+</div>
+<div class="section" id="software-controlled-bus-locking">
+<h3>Software Controlled Bus Locking<a class="headerlink" href="#software-controlled-bus-locking" title="永久链接至标题">¶</a></h3>
+<p>除了硬件自动执行锁总线之外，软件在编写代码的时候可以显示的要求锁住总线。
+当程序访问内存的时候，可以在访存指令前面显示的加一个LOCK前缀来锁住总线，实现原子语义。</p>
+<ol class="arabic simple">
+<li>位测试和更改指令(
+<strong>BTS</strong>,
+<strong>BTR</strong>,
+<strong>BTC</strong>)</li>
+<li>交换指令(
+<strong>XADD</strong>,
+<strong>CMPXCHG</strong>,
+<strong>CMPXCHG8B</strong>)</li>
+<li>LOCK前缀会自动加到
+<strong>XCHG</strong>
+指令上面</li>
+<li>单操作数的算数和逻辑运算指令:
+<strong>INC</strong>,
+<strong>DEC</strong>,
+<strong>NOT</strong>
+和
+<strong>NEG</strong>
+指令</li>
+<li>两个操作数的算数和逻辑运算指令:
+<strong>ADD</strong>,
+<strong>ADC</strong>,
+<strong>SUB</strong>,
+<strong>SBB</strong>,
+<strong>AND</strong>,
+<strong>OR</strong>
+和
+<strong>XOR</strong>
+指令</li>
+</ol>
+<div class="admonition important">
+<p class="first admonition-title">重要</p>
+<p class="last">Bus Locking对内存地址对齐没有要求，如果一个指令需要多个总线周期才能完成，也不影响原子性，
+因为总线都被锁住了，所以对不对齐没有关系，处于对处理器执行性能的考虑，最好还是对齐。</p>
+</div>
+</div>
+</div>
+<div class="section" id="cache-coherency-protocols">
+<h2>Cache coherency protocols<a class="headerlink" href="#cache-coherency-protocols" title="永久链接至标题">¶</a></h2>
+<p>Cache coherency protocols是缓存一致性协议，处理器使用缓存一致性协议保证了当处理器对内存进行写操作的时候，
+会刷新不同处理器上该内存位置的缓存，保证了不同处理器看到的数据是一致的，这往往是对编程来说是透明的。</p>
+<p><strong>参考资料</strong></p>
+<p><a class="reference external" href="https://software.intel.com/en-us/download/intel-64-and-ia-32-architectures-sdm-volume-3a-system-programming-guide-part-1">Intel® 64 and IA-32 Architectures Software Developer’s Manual Volume 3A: System Programming Guide, Part 1</a></p>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">CC</a></h1>
+
+
+
+<p class="blurb">日常总结分享</p>
+
+
+
+
+
+
+<h3>导航</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../link.html">网络资源</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">JCU</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">原子操作：多处理器的支持</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#guarateed-atomic-operation">Guarateed atomic operation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#bus-locking">Bus locking</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#automatic-locking">Automatic Locking</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#software-controlled-bus-locking">Software Controlled Bus Locking</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#cache-coherency-protocols">Cache coherency protocols</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../rst.html">rst示例</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../graphviz.html">graphviz</a></li>
+</ul>
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3>快速搜索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="转向" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, longxiongqiu.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/JCU/atomic.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

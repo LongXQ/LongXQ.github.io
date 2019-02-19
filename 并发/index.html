@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>JCU &#8212; CC 0.1 文档</title>
+    <title>并发：多核处理器的支持 &#8212; CC 0.1 文档</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
@@ -18,7 +18,7 @@
     <script type="text/javascript" src="../_static/translations.js"></script>
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="next" title="原子操作：多处理器的支持" href="atomic.html" />
+    <link rel="next" title="多核处理器的支持：原子性" href="atomic.html" />
     <link rel="prev" title="网络资源" href="../link.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -36,10 +36,17 @@
 
           <div class="body" role="main">
             
-  <div class="section" id="jcu">
-<h1>JCU<a class="headerlink" href="#jcu" title="永久链接至标题">¶</a></h1>
+  <div class="section" id="id1">
+<h1>并发：多核处理器的支持<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h1>
 <div class="toctree-wrapper compound">
 </div>
+<p>多线程并发编程在多核处理器中面临三个问题：</p>
+<ol class="arabic simple">
+<li>原子性</li>
+<li>有序性</li>
+<li>缓存一致性</li>
+</ol>
+<p>从处理器角度看处理器针对这些问题提供了哪些支持。</p>
 </div>
 
 
@@ -63,9 +70,10 @@
 <h3>导航</h3>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../link.html">网络资源</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">JCU</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="atomic.html">原子操作：多处理器的支持</a></li>
-<li class="toctree-l2"><a class="reference internal" href="memord.html">内存访问顺序</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">并发：多核处理器的支持</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="atomic.html">多核处理器的支持：原子性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ording.html">多核处理器的支持：有序性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="coherency.html">多核处理器的支持：缓存一致性</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../rst.html">rst示例</a></li>
@@ -97,7 +105,7 @@
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |
-      <a href="../_sources/JCU/index.rst.txt"
+      <a href="../_sources/并发/index.rst.txt"
           rel="nofollow">Page source</a>
     </div>
 

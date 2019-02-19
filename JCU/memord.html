@@ -1,0 +1,256 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>内存顺序(Memory Ording) &#8212; CC 0.1 文档</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <script type="text/javascript" src="../_static/translations.js"></script>
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="next" title="rst示例" href="../rst.html" />
+    <link rel="prev" title="原子操作：多处理器的支持" href="atomic.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="memory-ording">
+<h1>内存顺序(Memory Ording)<a class="headerlink" href="#memory-ording" title="永久链接至标题">¶</a></h1>
+<p>内存顺序是处理器处理读和写内存的顺序。
+处理器为了优化指令执行性能，执行指令顺序可能和程序不一致，如乱序执行，这种顺序叫processor ording，
+相反的叫program ording。</p>
+<ol class="arabic simple">
+<li><strong>program ording</strong>：处理器执行指令顺序和程序的顺序一样（也叫strong ording）</li>
+<li><strong>processor ording</strong>：为了优化指令执行性能，处理器执行指令顺序可能和程序不一致，如乱序执行。</li>
+</ol>
+<div class="graphviz"><object data="../_images/graphviz-8e4676d2794f2a8884f0825750656c33936e9795.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph atomic1 {
+    subgraph clusterA {
+        label=&quot;线程1&quot;
+        A1 [label=&quot;a=1&quot; shape=&quot;box&quot;]
+        B1 [label=&quot;b=2&quot; shape=&quot;box&quot;]
+        C1 [label=&quot;c=3&quot; shape=&quot;box&quot;]
+        D1 [label=&quot;done=1&quot; shape=&quot;box&quot;]
+        A1 -&gt; B1 -&gt; C1 -&gt; D1
+    }
+
+    subgraph clusterB {
+        label=&quot;线程2&quot;
+        A2 [label=&quot;...&quot; shape=&quot;box&quot;]
+        B2 [label=&quot;done==1?&quot; shape=&quot;box&quot;]
+        C2 [label=&quot;d=c&quot; shape=&quot;box&quot;]
+        D2 [label=&quot;...&quot; shape=&quot;box&quot;]
+        A2 -&gt; B2
+        B2 -&gt; C2 [label=&quot;YES&quot;]
+        B2 -&gt; D2 [label=&quot;NO&quot;]
+    }
+}</p></object></div>
+<p>在processor ording的情况下，线程2如果读取done等于1了，执行d=c，此时c的值可能不为2。此时在processor ording的情况下，线程2如果读取done等于1了，
+处理器执行线程1的指令的执行顺序可能变成下面这样：</p>
+<div class="graphviz"><object data="../_images/graphviz-d3702bd3d685f610cd9daf5b823a99a84efc3962.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph atomic2 {
+    subgraph clusterC {
+        label=&quot;线程1&quot;
+        A3 [label=&quot;a=1&quot; shape=&quot;box&quot;]
+        B3 [label=&quot;b=2&quot; shape=&quot;box&quot;]
+        C3 [label=&quot;done=1&quot; shape=&quot;box&quot;]
+        D3 [label=&quot;c=3&quot; shape=&quot;box&quot;]
+        A3 -&gt; B3 -&gt; C3 -&gt; D3
+    }
+}</p></object></div>
+<p>所以在processor order的情况下，如果没有其他防护措施，在一个核上写入一部分数据后，
+在另一个核上不能期待根据某个标志位来判断数据都准备好了。
+解决办法就是要使用一些方法措施来让操作串行化，保证后一条指令不会出现在前面指令还没有执行完的情况下提前执行。</p>
+<p>常见防护措施有：</p>
+<ol class="arabic simple">
+<li>加锁指令、LOCK前缀指令和串行指令</li>
+<li>内存屏障指令</li>
+</ol>
+<div class="section" id="lock">
+<h2>使用加锁指令和LOCK前缀保证操作的串行<a class="headerlink" href="#lock" title="永久链接至标题">¶</a></h2>
+<p>使用加锁指令和LOCK前缀能够保证指令本身的串行，而且会等待之前的所有指令完成，数据写会到内存中，保证了strong ording。</p>
+<div class="graphviz"><object data="../_images/graphviz-4ffdfffa88c22cb179307800065765292d388813.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph atomic1 {
+    subgraph clusterA {
+        label=&quot;线程1&quot;
+        A1 [label=&quot;LOCK a=1&quot; shape=&quot;box&quot;]
+        B1 [label=&quot;LOCK b=2&quot; shape=&quot;box&quot;]
+        C1 [label=&quot;LOCK c=3&quot; shape=&quot;box&quot;]
+        D1 [label=&quot;LOCK done=1&quot; shape=&quot;box&quot;]
+        A1 -&gt; B1 -&gt; C1 -&gt; D1
+    }
+}</p></object></div>
+<p>给线程1的每个指令都加上LOCK前缀，就能保证这四条执行的strong ording。当其他核读到done为1的时候，
+那么done之前的数据一定都准备好了。</p>
+<p>除了给每条指令加锁之外，还有插入一条额外的和功能无关的加锁指令的方。在这条加锁指令执行之前，
+该指令之前的所有数据操作都生效了，该指令仅仅就是为了保证操作串行的功能，和业务无关。</p>
+<div class="graphviz"><object data="../_images/graphviz-8f4f61ce8340e12d93ac9017b8fdde8e7c7fe576.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph atomic1 {
+    subgraph clusterA {
+        label=&quot;线程1&quot;
+        A1 [label=&quot;a=1&quot; shape=&quot;box&quot;]
+        B1 [label=&quot;b=2&quot; shape=&quot;box&quot;]
+        C1 [label=&quot;c=3&quot; shape=&quot;box&quot;]
+        D1 [label=&quot;lock addl&quot; shape=&quot;box&quot;]
+        E1 [label=&quot;done=1&quot; shape=&quot;box&quot;]
+        A1 -&gt; B1 -&gt; C1 -&gt; D1 -&gt; E1
+    }
+}</p></object></div>
+<p>当执行到lock addl这条指令的时候，之前的数据都生效了，这样其他核就能够根据done来判断数据是否准备好了。</p>
+<p>加锁这种做法缺点就是会影响处理器执行性能。每条指令都加锁，会锁住内存总线，影响其他核执行指令。</p>
+</div>
+<div class="section" id="id1">
+<h2>使用串行指令来保证操作的串行<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h2>
+<p>串行指令保证了处理器在执行下一条指令之前，串行指令前面的所有指令都已经完成了，寄存器的更改都完成了，数据都写到内存中去了。
+对于程序开发来说，常见的串行指令是
+<strong>CPUID</strong>，处理器也提供了其他串行指令，但是大部分都是在高优先级中使用，给内核使用的。</p>
+<div class="graphviz"><object data="../_images/graphviz-606bed43ca7607fbfe14a342904ec9c89c2fea4f.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph atomic1 {
+    subgraph clusterA {
+        label=&quot;线程1&quot;
+        A1 [label=&quot;a=1&quot; shape=&quot;box&quot;]
+        B1 [label=&quot;b=2&quot; shape=&quot;box&quot;]
+        C1 [label=&quot;c=3&quot; shape=&quot;box&quot;]
+        D1 [label=&quot;CPUID&quot; shape=&quot;box&quot;]
+        E1 [label=&quot;done=1&quot; shape=&quot;box&quot;]
+        A1 -&gt; B1 -&gt; C1 -&gt; D1 -&gt; E1
+    }
+}</p></object></div>
+<p>如上图一样，当执行done=1操作的时候，之前数据操作一定全部已经生效了，
+这样其他核就可以根据done这个标志来判断数据是否准备好了。</p>
+</div>
+<div class="section" id="id2">
+<h2>使用内存屏障指令保证操作的串行<a class="headerlink" href="#id2" title="永久链接至标题">¶</a></h2>
+<p>内存屏障指令（memory-ording instruction）有SFENCE, LFENCE, MFENCE。内存屏障指令提供了更细粒度的内存操作能力</p>
+<ol class="arabic simple">
+<li>SFENCE - 能够串行SFENCE指令前的所有写内存操作，保证SFENCE指令前的写操作全部完成, 但是不影响读操作。</li>
+</ol>
+<div class="graphviz"><object data="../_images/graphviz-25d191c295e11ebf5567f7ae98dcf7e225db297b.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph atomic1 {
+    subgraph clusterA {
+        label=&quot;线程1&quot;
+        A1 [label=&quot;a=1&quot; shape=&quot;box&quot;]
+        B1 [label=&quot;b=2&quot; shape=&quot;box&quot;]
+        C1 [label=&quot;c=3&quot; shape=&quot;box&quot;]
+        D1 [label=&quot;SFENCE&quot; shape=&quot;box&quot;]
+        E1 [label=&quot;done=1&quot; shape=&quot;box&quot;]
+        A1 -&gt; B1 -&gt; C1 -&gt; D1 -&gt; E1
+    }
+}</p></object></div>
+<p>在执行SFENCE的时候, 之前的写操作全部完成，</p>
+<ol class="arabic simple" start="2">
+<li>LFENCE - 能够串行LFENCE指令前的所有读内存操作,保证LFENCE指令前的读操作全部完成, 但是不影响写操作.</li>
+<li>MFENCE - 能够串行MFENCE指令前的所有读写内存操作。</li>
+</ol>
+</div>
+<div class="section" id="id3">
+<h2>举例<a class="headerlink" href="#id3" title="永久链接至标题">¶</a></h2>
+<p>以java的hotspot虚拟机实现为例。</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="c1">// A compiler barrier, forcing the C++ compiler to invalidate all memory assumptions</span>
+<span class="k">static</span> <span class="kr">inline</span> <span class="kt">void</span> <span class="nf">compiler_barrier</span><span class="p">()</span> <span class="p">{</span>
+<span class="n">__asm__</span> <span class="k">volatile</span> <span class="p">(</span><span class="s">&quot;&quot;</span> <span class="o">:</span> <span class="o">:</span> <span class="o">:</span> <span class="s">&quot;memory&quot;</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="kr">inline</span> <span class="kt">void</span> <span class="n">OrderAccess</span><span class="o">::</span><span class="n">fence</span><span class="p">()</span> <span class="p">{</span>
+<span class="c1">// always use locked addl since mfence is sometimes expensive</span>
+<span class="n">__asm__</span> <span class="k">volatile</span> <span class="p">(</span><span class="s">&quot;lock; addl $0,0(%%esp)&quot;</span> <span class="o">:</span> <span class="o">:</span> <span class="o">:</span> <span class="s">&quot;cc&quot;</span><span class="p">,</span> <span class="s">&quot;memory&quot;</span><span class="p">);</span>
+<span class="n">compiler_barrier</span><span class="p">();</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>在hotspot中，因为屏障指令开销大，是用lock指令来实现屏障的。</p>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">CC</a></h1>
+
+
+
+<p class="blurb">日常总结分享</p>
+
+
+
+
+
+
+<h3>导航</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../link.html">网络资源</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">JCU</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="atomic.html">原子操作：多处理器的支持</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">内存访问顺序</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lock">使用加锁指令和LOCK前缀保证操作的串行</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id1">使用串行指令来保证操作的串行</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id2">使用内存屏障指令保证操作的串行</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id3">举例</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../rst.html">rst示例</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../graphviz.html">graphviz</a></li>
+</ul>
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3>快速搜索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="转向" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, longxiongqiu.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/JCU/memord.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

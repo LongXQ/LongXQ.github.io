@@ -1,0 +1,172 @@
+内存顺序(Memory Ording)
+==============================
+
+内存顺序是处理器处理读和写内存的顺序。
+处理器为了优化指令执行性能，执行指令顺序可能和程序不一致，如乱序执行，这种顺序叫processor ording，
+相反的叫program ording。
+
+1. **program ording**：处理器执行指令顺序和程序的顺序一样（也叫strong ording）
+2. **processor ording**：为了优化指令执行性能，处理器执行指令顺序可能和程序不一致，如乱序执行。
+
+
+.. graphviz::
+
+   digraph atomic1 {
+       subgraph clusterA {
+           label="线程1"
+           A1 [label="a=1" shape="box"]
+           B1 [label="b=2" shape="box"]
+           C1 [label="c=3" shape="box"]
+           D1 [label="done=1" shape="box"]
+           A1 -> B1 -> C1 -> D1
+       }
+
+       subgraph clusterB {
+           label="线程2"
+           A2 [label="..." shape="box"]
+           B2 [label="done==1?" shape="box"]
+           C2 [label="d=c" shape="box"]
+           D2 [label="..." shape="box"]
+           A2 -> B2
+           B2 -> C2 [label="YES"]
+           B2 -> D2 [label="NO"]     
+       }
+   }
+
+在processor ording的情况下，线程2如果读取done等于1了，执行d=c，此时c的值可能不为2。此时在processor ording的情况下，线程2如果读取done等于1了，
+处理器执行线程1的指令的执行顺序可能变成下面这样：
+
+.. graphviz::
+
+   digraph atomic2 {
+       subgraph clusterC {
+           label="线程1"
+           A3 [label="a=1" shape="box"]
+           B3 [label="b=2" shape="box"]
+           C3 [label="done=1" shape="box"]
+           D3 [label="c=3" shape="box"]
+           A3 -> B3 -> C3 -> D3
+       }
+   }
+
+所以在processor order的情况下，如果没有其他防护措施，在一个核上写入一部分数据后，
+在另一个核上不能期待根据某个标志位来判断数据都准备好了。
+解决办法就是要使用一些方法措施来让操作串行化，保证后一条指令不会出现在前面指令还没有执行完的情况下提前执行。
+
+常见防护措施有：
+
+1. 加锁指令、LOCK前缀指令和串行指令
+2. 内存屏障指令
+
+使用加锁指令和LOCK前缀保证操作的串行
+---------------------------------------
+
+使用加锁指令和LOCK前缀能够保证指令本身的串行，而且会等待之前的所有指令完成，数据写会到内存中，保证了strong ording。
+
+.. graphviz::
+
+   digraph atomic1 {
+       subgraph clusterA {
+           label="线程1"
+           A1 [label="LOCK a=1" shape="box"]
+           B1 [label="LOCK b=2" shape="box"]
+           C1 [label="LOCK c=3" shape="box"]
+           D1 [label="LOCK done=1" shape="box"]
+           A1 -> B1 -> C1 -> D1
+       }
+   }
+
+给线程1的每个指令都加上LOCK前缀，就能保证这四条执行的strong ording。当其他核读到done为1的时候，
+那么done之前的数据一定都准备好了。
+
+除了给每条指令加锁之外，还有插入一条额外的和功能无关的加锁指令的方。在这条加锁指令执行之前，
+该指令之前的所有数据操作都生效了，该指令仅仅就是为了保证操作串行的功能，和业务无关。
+
+.. graphviz::
+
+   digraph atomic1 {
+       subgraph clusterA {
+           label="线程1"
+           A1 [label="a=1" shape="box"]
+           B1 [label="b=2" shape="box"]
+           C1 [label="c=3" shape="box"]
+           D1 [label="lock addl" shape="box"]
+           E1 [label="done=1" shape="box"]
+           A1 -> B1 -> C1 -> D1 -> E1
+       }
+   }
+
+当执行到lock addl这条指令的时候，之前的数据都生效了，这样其他核就能够根据done来判断数据是否准备好了。
+
+加锁这种做法缺点就是会影响处理器执行性能。每条指令都加锁，会锁住内存总线，影响其他核执行指令。
+
+使用串行指令来保证操作的串行
+------------------------------
+
+串行指令保证了处理器在执行下一条指令之前，串行指令前面的所有指令都已经完成了，寄存器的更改都完成了，数据都写到内存中去了。
+对于程序开发来说，常见的串行指令是
+**CPUID**，处理器也提供了其他串行指令，但是大部分都是在高优先级中使用，给内核使用的。
+
+.. graphviz::
+
+   digraph atomic1 {
+       subgraph clusterA {
+           label="线程1"
+           A1 [label="a=1" shape="box"]
+           B1 [label="b=2" shape="box"]
+           C1 [label="c=3" shape="box"]
+           D1 [label="CPUID" shape="box"]
+           E1 [label="done=1" shape="box"]
+           A1 -> B1 -> C1 -> D1 -> E1
+       }
+   }
+
+如上图一样，当执行done=1操作的时候，之前数据操作一定全部已经生效了，
+这样其他核就可以根据done这个标志来判断数据是否准备好了。
+
+使用内存屏障指令保证操作的串行
+------------------------------------
+
+内存屏障指令（memory-ording instruction）有SFENCE, LFENCE, MFENCE。内存屏障指令提供了更细粒度的内存操作能力
+
+1. SFENCE - 能够串行SFENCE指令前的所有写内存操作，保证SFENCE指令前的写操作全部完成, 但是不影响读操作。
+
+.. graphviz::
+
+   digraph atomic1 {
+       subgraph clusterA {
+           label="线程1"
+           A1 [label="a=1" shape="box"]
+           B1 [label="b=2" shape="box"]
+           C1 [label="c=3" shape="box"]
+           D1 [label="SFENCE" shape="box"]
+           E1 [label="done=1" shape="box"]
+           A1 -> B1 -> C1 -> D1 -> E1
+       }
+   }
+
+在执行SFENCE的时候, 之前的写操作全部完成，
+
+2. LFENCE - 能够串行LFENCE指令前的所有读内存操作,保证LFENCE指令前的读操作全部完成, 但是不影响写操作.
+3. MFENCE - 能够串行MFENCE指令前的所有读写内存操作。
+
+
+举例
+----------
+
+以java的hotspot虚拟机实现为例。
+
+.. code-block:: c++
+
+    // A compiler barrier, forcing the C++ compiler to invalidate all memory assumptions
+    static inline void compiler_barrier() {
+    __asm__ volatile ("" : : : "memory");
+    }
+
+    inline void OrderAccess::fence() {
+    // always use locked addl since mfence is sometimes expensive
+    __asm__ volatile ("lock; addl $0,0(%%esp)" : : : "cc", "memory");
+    compiler_barrier();
+    }
+
+在hotspot中，因为屏障指令开销大，是用lock指令来实现屏障的。

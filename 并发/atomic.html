@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>原子操作：多处理器的支持 &#8212; CC 0.1 文档</title>
+    <title>多核处理器的支持：原子性 &#8212; CC 0.1 文档</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
@@ -18,8 +18,8 @@
     <script type="text/javascript" src="../_static/translations.js"></script>
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="next" title="内存访问顺序(Memory Ording)" href="memord.html" />
-    <link rel="prev" title="JCU" href="index.html" />
+    <link rel="next" title="多核处理器的支持：有序性" href="ording.html" />
+    <link rel="prev" title="并发：多核处理器的支持" href="index.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   
@@ -37,56 +37,66 @@
           <div class="body" role="main">
             
   <div class="section" id="id1">
-<h1>原子操作：多处理器的支持<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h1>
+<h1>多核处理器的支持：原子性<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h1>
 <div class="admonition note">
 <p class="first admonition-title">注解</p>
-<p class="last">不同语言提供的原子操作、或者基于原子操作更高层的一些高级并发结构都离不开硬件的支持</p>
+<p class="last">我们以X86/64体系结构作为讨论对象。</p>
 </div>
-<div class="graphviz"><object data="../_images/graphviz-0fc48292a9daa6bf8984e9b09c3041958a2bfa8a.svg" type="image/svg+xml" class="graphviz">
+<div class="graphviz"><object data="../_images/graphviz-3bad3460d3f9838d4dbf550ae9d107d0d4428f32.svg" type="image/svg+xml" class="graphviz">
 <p class="warning">digraph atomic1 {
     A [label=&quot;线程1&quot;]
     B [label=&quot;线程2&quot;]
     C [shape = &quot;record&quot; label=&quot; | ... | | &lt;f1&gt; a | | ... |&quot; xlabel=&quot;内存&quot;]
-    A -&gt; C:f1 [label=&quot;a=1&quot;]
-    B -&gt; C:f1 [label=&quot;a=2&quot;]
+    A -&gt; C:f1 [label=&quot;a=a+1&quot;]
+    B -&gt; C:f1 [label=&quot;a=a+2&quot;]
 }</p></object></div>
-<p>在多处理器下，两个或多个线程可能在不同处理器上同时访问相同的内存地址，那么就会存在冲突。
-如上图所示，两个线程同时写a，那么a到底是1还是2。所以需要多处理器提供一些通信机制或者内存
-访问协议来保证数据的一致和正确。</p>
-<p>在x86处理器中，针对内存操作处理器支持被叫做
-<strong>locked atomic operation</strong>
-的原子操作，
-这些操作典型应用就是保护共享数据结构，处理器提供三种机制实现这些操作。</p>
+<p>在多核处理器下，两个或多个线程可能在不同核上同时写相同的内存地址，如上图例子中两个线程的操作都是先读取a在内存中的值，
+然后加上一个值，在写回内存中，因为这个操作不是原子性的，所以可能存在线程1在读取a的值之后，在没加1之前，a在内存中的值可能已经被在其他核上
+执行的线程2改变了，此时线程1用了一个旧值加1然后写回内存中覆盖了线程2更新的a的值。</p>
+<p>针对需要原子性的操作的场景，处理器提供了原子操作的支持。</p>
+<p>在x86处理器中，这类原子性的操作被叫做
+<strong>locked atomic operation</strong>，
+这些操作典型应用就是保护共享数据结构，处理器提供了三种机制实现这些操作。</p>
 <ol class="arabic simple">
-<li>Guarateed atomic operation</li>
-<li>Bus locking</li>
-<li>Cache coherency protocols</li>
+<li>Guarateed atomic operation（有保证的原子操作）</li>
+<li>Bus locking（锁住总线的原子操作）</li>
+<li>Cache coherency protocols（缓存一致性协议）</li>
 </ol>
 <div class="section" id="guarateed-atomic-operation">
 <h2>Guarateed atomic operation<a class="headerlink" href="#guarateed-atomic-operation" title="永久链接至标题">¶</a></h2>
-<p>现代x86处理器保证了下面的基础内存操作是原子的：</p>
+<p>现代x86/64处理器保证了下面的基础操作都是原子的：</p>
 <ol class="arabic simple">
 <li>读或写一个byte(1字节)</li>
 <li>读或写一个16位对齐的word(2字节)</li>
 <li>读或写一个32位对齐的doubleword(4字节)</li>
 <li>读或写一个64位对齐的quadword(8字节)</li>
 </ol>
-<p>这些操作都是被处理器自动原子地执行的，所以叫
+<p>这些操作都是被处理器自动原子地执行的，所以才叫做
 <strong>Guarateed atomic operation</strong>。</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>所以a=1是原子操作。
 </pre></div>
 </div>
 <div class="admonition important">
 <p class="first admonition-title">重要</p>
-<p class="last">对齐原因是数据总线能够在一个总线周期内访问到数据。如果没有对齐，可能一次访问需要多个周期。</p>
+<p class="last">对齐原因是通过数据总线能够在一个总线周期内访问到数据。如果没有对齐，可能一次访问需要多个周期。</p>
 </div>
 </div>
 <div class="section" id="bus-locking">
 <h2>Bus locking<a class="headerlink" href="#bus-locking" title="永久链接至标题">¶</a></h2>
-<p>Intel 64和IA-32处理器提供了一个LOCK#信号用来锁住系统总线，当存在有竞争的内存操作的时候锁住总线。
-当总线被锁住了，其他处理器或其他总线总线设备的锁住总线请求就会被阻塞，通过锁住总线的
-方式对同一内存地址访问实现原子操作
-有的处理器不管访问的内存有没有被缓存，都是锁住内存。有的处理器在有处理器缓存的情况下，是锁住缓存）。</p>
+<p>除了基础操作是原子性的之外，处理器还提供了一个LOCK#信号用来锁住系统总线实现原子操作。
+当存在有竞争的内存操作的时候，一个线程先发送LOCK信号锁住总线取得总线使用权，那么其他核上执行的线程或其他总线设备的锁住总线请求就会被阻塞，通过锁住总线的
+方式阻塞其他未取得总线使用权的线程的操作，从而实现原子操作。</p>
+<div class="admonition note">
+<p class="first admonition-title">注解</p>
+<p class="last">有的处理器体系结构不管操作的内存有没有被L1、L2、L3三级缓存结构缓存，都是锁住内存总线。
+有的处理器体系结构在操作的内存被缓存的情况下，只会锁住缓存总线（cache line，缓存锁）。
+锁总线的方式对性能是有影响的，应为锁住总线会阻塞其他线程对内存的读写操作。</p>
+</div>
+<p>Bus Locking提供了两种机制：</p>
+<ol class="arabic simple">
+<li>自动锁总线（Automatic locking）</li>
+<li>软件控制锁总线（Software Controlled Bus Locking）</li>
+</ol>
 <div class="section" id="automatic-locking">
 <h3>Automatic Locking<a class="headerlink" href="#automatic-locking" title="永久链接至标题">¶</a></h3>
 <ol class="arabic simple">
@@ -98,14 +108,14 @@
 <li>更新页目录和页表项的时候</li>
 <li>响应中断的时候</li>
 </ol>
-<p>以上操作都有LOCK语义，处理器自动锁总线，所以叫
+<p>以上操作都有LOCK语义，处理器会自动锁总线，所以才叫
 <strong>Automatic Locking</strong>。
-和我们编程相关的有XCHG指令，其他几项都是操作系统关心的。所以我们可以使用XCHG来实现原子操作。</p>
+和我们上层相关的有XCHG指令，其他几项都是操作系统关心的。所以我们可以使用XCHG来实现一些原子操作。</p>
 </div>
 <div class="section" id="software-controlled-bus-locking">
 <h3>Software Controlled Bus Locking<a class="headerlink" href="#software-controlled-bus-locking" title="永久链接至标题">¶</a></h3>
-<p>除了硬件自动执行锁总线之外，软件在编写代码的时候可以显示的要求锁住总线。
-当程序访问内存的时候，可以在访存指令前面显示的加一个LOCK前缀来锁住总线，实现原子语义。</p>
+<p>除了一些具有LOCK语义的指令操作之外，处理器还提供了显示的方法允许其他一些指令也具有锁住总线的能力。
+处理器提供了在一些指令前面显示的加一个LOCK前缀来显示要求锁住总线，使该指令也具有了原子语义，成为了原子操作。</p>
 <ol class="arabic simple">
 <li>位测试和更改指令(
 <strong>BTS</strong>,
@@ -139,14 +149,18 @@
 <div class="admonition important">
 <p class="first admonition-title">重要</p>
 <p class="last">Bus Locking对内存地址对齐没有要求，如果一个指令需要多个总线周期才能完成，也不影响原子性，
-因为总线都被锁住了，所以对不对齐没有关系，处于对处理器执行性能的考虑，最好还是对齐。</p>
+因为总线都被锁住了，所以对不对齐没有关系，出于对处理器执行性能的考虑，最好还是保持对齐。</p>
 </div>
 </div>
 </div>
 <div class="section" id="cache-coherency-protocols">
 <h2>Cache coherency protocols<a class="headerlink" href="#cache-coherency-protocols" title="永久链接至标题">¶</a></h2>
-<p>Cache coherency protocols是缓存一致性协议，处理器使用缓存一致性协议保证了当处理器对内存进行写操作的时候，
-会刷新不同处理器上该内存位置的缓存，保证了不同处理器看到的数据是一致的，这往往是对编程来说是透明的。</p>
+<p>Cache coherency protocols是缓存一致性协议，主要是保证了原子操作的正确性。
+当频繁访问的内存被L1或L2、L3缓存结构缓存的时候
+处理器往往使用缓存一致性协议来确保原子操作在更新完缓存后，数据会被正确的同步到其他核上缓存了相同内存的缓存中和主存中去
+，同时缓存一致性协议保证了不允许缓存了相同数据的两个或多个核同时执行更改被缓存了数据的指令
+（就是使用了前面提到的缓存锁cache lock机制）。
+保证了在不同核上执行的线程看到的数据是一样的，确保了原子操作的正确性。这种机制对对编程来说是透明的。</p>
 </div>
 <div class="section" id="id2">
 <h2>举例<a class="headerlink" href="#id2" title="永久链接至标题">¶</a></h2>
@@ -223,8 +237,8 @@
 <h3>导航</h3>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../link.html">网络资源</a></li>
-<li class="toctree-l1 current"><a class="reference internal" href="index.html">JCU</a><ul class="current">
-<li class="toctree-l2 current"><a class="current reference internal" href="#">原子操作：多处理器的支持</a><ul>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">并发：多核处理器的支持</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">多核处理器的支持：原子性</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#guarateed-atomic-operation">Guarateed atomic operation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#bus-locking">Bus locking</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#automatic-locking">Automatic Locking</a></li>
@@ -235,7 +249,8 @@
 <li class="toctree-l3"><a class="reference internal" href="#id2">举例</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="memord.html">内存访问顺序</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ording.html">多核处理器的支持：有序性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="coherency.html">多核处理器的支持：缓存一致性</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../rst.html">rst示例</a></li>
@@ -267,7 +282,7 @@
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |
-      <a href="../_sources/JCU/atomic.rst.txt"
+      <a href="../_sources/并发/atomic.rst.txt"
           rel="nofollow">Page source</a>
     </div>
 

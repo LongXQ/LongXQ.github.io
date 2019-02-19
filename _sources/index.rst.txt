@@ -6,6 +6,6 @@
     :maxdepth: 6
 
     link
-    JCU/index
+    并发/index
     rst示例 <rst>
     graphviz

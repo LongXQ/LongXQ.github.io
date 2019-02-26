@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>多核处理器的支持：有序性 &#8212; CC 0.1 文档</title>
+    <title>多核处理器的支持：内存顺序 &#8212; CC 0.1 文档</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
@@ -37,143 +37,406 @@
           <div class="body" role="main">
             
   <div class="section" id="id1">
-<h1>多核处理器的支持：有序性<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h1>
-<p>内存顺序是处理器处理读和写内存操作的顺序。对于读写内存操作，处理器支持两种内存顺序：</p>
+<h1>多核处理器的支持：内存顺序<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h1>
+<div class="admonition note">
+<p class="first admonition-title">注解</p>
+<p class="last">给予X86架构讨论</p>
+</div>
+<p>内存顺序是处理器通过系统总线处理读内存和写内存的顺序。Intel的处理器支持两种内存顺序模型：</p>
 <ol class="arabic simple">
-<li><strong>program ording</strong>：处理器执行指令顺序和程序的顺序一样（也叫strong ording）</li>
+<li><strong>program ording</strong>：处理器执行指令顺序和程序的顺序一样（也叫strong ording）。</li>
 <li><strong>processor ording</strong>：为了优化指令执行性能，处理器执行指令顺序可能和程序不一致，如乱序执行。</li>
 </ol>
-<p>如果处理器执行的program ording，那么一切都是按照程序的顺序来执行的，都是有序的。
-如下图描述的，当线程执行完done=1语句的时候，那么前面的语句肯定都已经执行完了，其他核上的线程就能根据done是否等于1
-来判断a、b、c这三个数据是否准备好了。</p>
-<div class="graphviz"><object data="../_images/graphviz-c952684134ff2a2ec7e1034e7483b92e3318066b.svg" type="image/svg+xml" class="graphviz">
-<p class="warning">digraph atomic1 {
-    subgraph clusterA {
-        label=&quot;线程1&quot;
-        A1 [label=&quot;a=1&quot; shape=&quot;box&quot;]
-        B1 [label=&quot;b=2&quot; shape=&quot;box&quot;]
-        C1 [label=&quot;c=3&quot; shape=&quot;box&quot;]
-        D1 [label=&quot;done=1&quot; shape=&quot;box&quot;]
-        A1 -&gt; B1 -&gt; C1 -&gt; D1
-    }
-
-    subgraph clusterB {
-        label=&quot;线程2&quot;
-        A2 [label=&quot;...&quot; shape=&quot;box&quot;]
-        B2 [label=&quot;done==1?&quot; shape=&quot;box&quot;]
-        C2 [label=&quot;d=c&quot; shape=&quot;box&quot;]
-        D2 [label=&quot;...&quot; shape=&quot;box&quot;]
-        A2 -&gt; B2
-        B2 -&gt; C2 [label=&quot;YES&quot;]
-        B2 -&gt; D2 [label=&quot;NO&quot;]
-    }
-}</p></object></div>
-<p>然后现代处理器为了优化指令的执行效率，处理器会执行processor ording，处理器在取指后，会分析哪些指令没有关联，对于一些没有关联的指令可以乱序执行来提升效率，
-这样他们实际执行的顺序可能和程序中不一样。</p>
-<p>在processor ording的情况下，线程2如果读取done等于1了，在执行d=c的时候，此时c的值可能还不为3。因为可能在线程2读取done等于1了的时候，
-线程1的指令的执行顺序可能变成了下面这样，done=1提到了c=3的前面了，此时c=3还未执行：</p>
-<div class="graphviz"><object data="../_images/graphviz-5c2bbc27fdbecd5fa2a44cb60d551a5ec21473af.svg" type="image/svg+xml" class="graphviz">
-<p class="warning">digraph atomic2 {
-    subgraph clusterC {
-        label=&quot;线程1&quot;
-        A3 [label=&quot;a=1&quot; shape=&quot;box&quot;]
-        B3 [label=&quot;b=2&quot; shape=&quot;box&quot;]
-        C3 [label=&quot;done=1&quot; shape=&quot;box&quot;]
-        D3 [label=&quot;c=3&quot; shape=&quot;box&quot;]
-        A3 -&gt; B3 -&gt; C3 -&gt; D3
-    }
-}</p></object></div>
-<p>所以在processor order的情况下，如果没有其他防护措施，
-<strong>在一个核上写入一部分数据后，在另一个核上不能期待根据某个标志位来判断数据都准备好了</strong>。</p>
-<p>所以处理器提供了机制给我们在有需要保证指令有序执行的情况下使用。
-解决办法就是让操作串行化，保证指令有序执行。确保后一条指令不会出现在前面指令还没有执行完的情况下提前执行。</p>
-<p>常见防护措施有：</p>
+<p>program ording没有什么说的，这里讨论X86支持的processor ording。</p>
+<p>对于processor ording来说，有四种乱序：</p>
 <ol class="arabic simple">
-<li>加锁指令、LOCK前缀指令</li>
-<li>串行指令</li>
-<li>内存屏障指令</li>
+<li>loadload乱序</li>
+<li>loadstore乱序</li>
+<li>storeload乱序</li>
+<li>storestore乱序</li>
 </ol>
-<div class="section" id="lock">
-<h2>使用加锁指令和LOCK前缀保证操作的串行<a class="headerlink" href="#lock" title="永久链接至标题">¶</a></h2>
-<p>使用加锁指令和LOCK前缀能够保证指令本身的串行，而且会等待之前的所有指令完成，数据写会到内存中，保证了strong ording。</p>
-<div class="graphviz"><object data="../_images/graphviz-f197da1e0c944d7b1bd74f30a5bb90001177a191.svg" type="image/svg+xml" class="graphviz">
-<p class="warning">digraph atomic1 {
-    subgraph clusterA {
-        label=&quot;线程1&quot;
-        A1 [label=&quot;LOCK a=1&quot; shape=&quot;box&quot;]
-        B1 [label=&quot;LOCK b=2&quot; shape=&quot;box&quot;]
-        C1 [label=&quot;LOCK c=3&quot; shape=&quot;box&quot;]
-        D1 [label=&quot;LOCK done=1&quot; shape=&quot;box&quot;]
-        A1 -&gt; B1 -&gt; C1 -&gt; D1
-    }
-}</p></object></div>
-<p>给线程1的每个指令都加上LOCK前缀，就能保证这四条执行的strong ording。当其他核读到done为1的时候，
-那么done之前的数据一定都准备好了。</p>
-<p>除了给每条指令加锁之外，还有插入一条额外的和功能无关的加锁指令的方。在这条加锁指令执行之前，
-该指令之前的所有数据操作都生效了，该指令仅仅就是为了保证操作串行的功能，和业务无关。</p>
-<div class="graphviz"><object data="../_images/graphviz-aff0e56ba5ba617573a962486e0ab2d5d392e59c.svg" type="image/svg+xml" class="graphviz">
-<p class="warning">digraph atomic1 {
-    subgraph clusterA {
-        label=&quot;线程1&quot;
-        A1 [label=&quot;a=1&quot; shape=&quot;box&quot;]
-        B1 [label=&quot;b=2&quot; shape=&quot;box&quot;]
-        C1 [label=&quot;c=3&quot; shape=&quot;box&quot;]
-        D1 [label=&quot;lock addl $0,0(%%esp)&quot; shape=&quot;box&quot;]
-        E1 [label=&quot;done=1&quot; shape=&quot;box&quot;]
-        A1 -&gt; B1 -&gt; C1 -&gt; D1 -&gt; E1
-    }
-}</p></object></div>
-<p>当执行到lock addl这条指令的时候，之前的数据都生效了，这样其他核就能够根据done来判断数据是否准备好了。
-lock addl $0,0(%%esp)这条指令是往esp寄存器指向的内存地址加0操作，也就是啥也没干，这条指令只是为了不让指令乱序执行，
-保证了该指令前的其他指令不会跨过lock指令，在之后执行，且之前的数据已经写入内存了。</p>
-<p>加锁这种做法缺点就是会影响处理器执行性能。每条指令都加锁，会锁住内存总线，影响其他核执行指令。</p>
+<div class="section" id="loadload">
+<h2>loadload乱序<a class="headerlink" href="#loadload" title="永久链接至标题">¶</a></h2>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="cp">#on CPU1</span>
+<span class="kt">void</span> <span class="nf">foo</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">store</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">store</span> <span class="n">b</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cp">#on CPU2</span>
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">load</span> <span class="n">r1</span><span class="p">,</span> <span class="n">b</span><span class="p">;</span>
+    <span class="n">load</span> <span class="n">r2</span><span class="p">,</span> <span class="n">a</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li>CPU2发生loadload乱序，先load a，此时a的值还未写入，r2=0。</li>
+<li>CPU1执行store a，此时a=1。</li>
+<li>CPU1执行store b，此时b=1。</li>
+<li>CPU2执行load b，此时b=1，所以r1=1。</li>
+</ol>
+<p>所以发生loadload乱序的情况，出现了r1=1，r2=0。如果在没有乱序的情况下，不可能会出现r1=1，r2=0的情况。</p>
+</div>
+<div class="section" id="loadstore">
+<h2>loadstore乱序<a class="headerlink" href="#loadstore" title="永久链接至标题">¶</a></h2>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="cp">#on CPU1</span>
+<span class="kt">void</span> <span class="nf">foo</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">load</span> <span class="n">r1</span><span class="p">,</span> <span class="n">a</span><span class="p">;</span>
+    <span class="n">store</span> <span class="n">b</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cp">#on CPU2</span>
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">load</span> <span class="n">r2</span><span class="p">,</span> <span class="n">b</span><span class="p">;</span>
+    <span class="n">store</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li>CPU1发生了loadstore乱序，先执行store b。此时b=1</li>
+<li>CPU2执行load b，此时r2=1。</li>
+<li>CPU1执行load a，此时r1=0.</li>
+<li>CPU2执行store a，此时a=1。</li>
+</ol>
+<p>所以在loadstore乱序的情况下，出现了r1=0，r2=1。如果在没有乱序的情况下，不可能会出现r1=0，r2=1的情况。</p>
+</div>
+<div class="section" id="storestore">
+<h2>storestore乱序<a class="headerlink" href="#storestore" title="永久链接至标题">¶</a></h2>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="cp">#on CPU1</span>
+<span class="kt">void</span> <span class="nf">foo</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">store</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">store</span> <span class="n">b</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cp">#on CPU2</span>
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">load</span> <span class="n">r1</span><span class="p">,</span> <span class="n">b</span><span class="p">;</span>
+    <span class="n">load</span> <span class="n">r2</span><span class="p">,</span> <span class="n">a</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li>CPU1发生了storestore乱序，先执行store b。此时b=1</li>
+<li>CPU2执行load b，此时r1=1。</li>
+<li>CPU2执行load a，此时r2=0.</li>
+<li>CPU1执行store a，此时a=1。</li>
+</ol>
+<p>所以在loadstore乱序的情况下，出现了r1=1，r2=0的情况。如果在没有乱序的情况下，不可能会出现r1=1，r2=0的情况。
+所以在多核的情况下，不能根据b=1来判断a也为1了，也就是不能根据b=1来作为标志，表示前面的数据都准备好了。</p>
+</div>
+<div class="section" id="storeload">
+<h2>storeload乱序<a class="headerlink" href="#storeload" title="永久链接至标题">¶</a></h2>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="cp">#on CPU1</span>
+<span class="kt">void</span> <span class="nf">foo</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">store</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">load</span> <span class="n">r1</span><span class="p">,</span> <span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cp">#on CPU2</span>
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">store</span> <span class="n">b</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">load</span> <span class="n">r2</span><span class="p">,</span> <span class="n">a</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li>CPU1发生了storeload乱序，先执行了load b。此时r1=0。</li>
+<li>CPU2执行store b，此时b=1。</li>
+<li>CPU2执行load a，此时r2=0.</li>
+<li>CPU1执行store a，此时a=1。</li>
+</ol>
+<p>所以在storeload乱序的情况下，出现了r1=0，r2=0的情况。如果在没有乱序的情况下，不可能会出现r1=0，r2=0的情况。</p>
 </div>
 <div class="section" id="id2">
-<h2>使用串行指令来保证操作的串行<a class="headerlink" href="#id2" title="永久链接至标题">¶</a></h2>
+<h2>为什么会出现乱序<a class="headerlink" href="#id2" title="永久链接至标题">¶</a></h2>
+<p>乱序的出现就是优化指令执行的效率，提升CPU性能，但是乱序的前提是要保证该线程在CPU中执行的正确性，保证线程的
+执行效果和在没有乱序的执行效果一样。</p>
+</div>
+<div class="section" id="id3">
+<h2>#loadload内存屏障<a class="headerlink" href="#id3" title="永久链接至标题">¶</a></h2>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="cp">#on CPU1</span>
+<span class="kt">void</span> <span class="nf">foo</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">store</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">store</span> <span class="n">b</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cp">#on CPU2</span>
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">load</span> <span class="n">r1</span><span class="p">,</span> <span class="n">b</span><span class="p">;</span>
+    <span class="cp">#loadload</span>
+    <span class="n">load</span> <span class="n">r2</span><span class="p">,</span> <span class="n">a</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>CPU2加了#loadload屏障后，屏障后面的load指令不会执行，直到屏障前面的load指令执行完成。</p>
+</div>
+<div class="section" id="id4">
+<h2>#loadstore内存屏障<a class="headerlink" href="#id4" title="永久链接至标题">¶</a></h2>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="cp">#on CPU1</span>
+<span class="kt">void</span> <span class="nf">foo</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">load</span> <span class="n">r1</span><span class="p">,</span> <span class="n">a</span><span class="p">;</span>
+    <span class="cp">#loadstore</span>
+    <span class="n">store</span> <span class="n">b</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cp">#on CPU2</span>
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">load</span> <span class="n">r2</span><span class="p">,</span> <span class="n">b</span><span class="p">;</span>
+    <span class="n">store</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>#loadstore屏障保证了屏障后面的store指令等待屏障前面的load指令执行完成后才会执行</p>
+</div>
+<div class="section" id="id5">
+<h2>#storestore内存屏障<a class="headerlink" href="#id5" title="永久链接至标题">¶</a></h2>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="cp">#on CPU1</span>
+<span class="kt">void</span> <span class="nf">foo</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">store</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">store</span> <span class="n">b</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cp">#on CPU2</span>
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">load</span> <span class="n">r1</span><span class="p">,</span> <span class="n">b</span><span class="p">;</span>
+    <span class="n">load</span> <span class="n">r2</span><span class="p">,</span> <span class="n">a</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>#storestore屏障保证了屏障后面的store指令要等到屏障前面的store指令执行完成后才会执行。</p>
+</div>
+<div class="section" id="id6">
+<h2>#storeload内存屏障<a class="headerlink" href="#id6" title="永久链接至标题">¶</a></h2>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="cp">#on CPU1</span>
+<span class="kt">void</span> <span class="nf">foo</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">store</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="cp">#storeload</span>
+    <span class="n">load</span> <span class="n">r1</span><span class="p">,</span> <span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cp">#on CPU2</span>
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">store</span> <span class="n">b</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">load</span> <span class="n">r2</span><span class="p">,</span> <span class="n">a</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>#storeload屏障保证了屏障后面的load指令要等到屏障前面的store指令执行完成后才会执行。</p>
+</div>
+<div class="section" id="id7">
+<h2>缓存一致性<a class="headerlink" href="#id7" title="永久链接至标题">¶</a></h2>
+<p>现代CPU引入了多级缓存来加速CPU访问内存的速度。CPU如果出现cache hit的时候会直接从缓存中读取数据，还不用去内存中。
+因为CPU的缓存是独立的，所以就需要来维护缓存数据的一致。</p>
+<p>因为store操作可能会等待很久（可能需要发送invalid命令使其他CPU上的缓存失效，这可能要等待很久。），所以为了加速执行速度，
+又引入store buffer结构，把store操作写到store buffer中，然后就马上返回执行下面的命令。等后续有时间了，在把store buffer中，然后就马上返回执行下面的命令。等后续有时间了，在把store
+中的数据写入到缓存和内存中。</p>
+<p>缓存一直性协议和store buffer请参考下面的论文。</p>
+<p><a class="reference external" href="http://www.puppetmastertrading.com/images/hwViewForSwHackers.pdf">Memory Barriers: a Hardware View for Software Hackers</a></p>
+</div>
+<div class="section" id="id8">
+<h2>局部可见（有序的）和全局可见（乱序的）<a class="headerlink" href="#id8" title="永久链接至标题">¶</a></h2>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="cp">#on CPU1</span>
+<span class="kt">void</span> <span class="nf">foo</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">store</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">store</span> <span class="n">b</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cp">#on CPU2</span>
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">load</span> <span class="n">r1</span><span class="p">,</span> <span class="n">a</span>
+    <span class="n">load</span> <span class="n">r2</span><span class="p">,</span> <span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li>CPU1执行store a，假设写到了store buffer中。</li>
+<li>CPU1执行store b，写到了缓存中。</li>
+<li>CPU2执行load a，从缓存中读取a的数据，此时只能读到a的旧值0，所以r1=0。</li>
+<li>CPU2执行load b，从缓存中读取到了b的新值1，所以r2=1。</li>
+</ol>
+<p>因为引入了缓存和store buffer结构，出现了不同CPu读到的值不一致的情况。store a的执行结果全局不可见，只能在执行
+该操作的CPU1可见，因为在该CPU1中如果执行load a，由于store buffer forwarding，能够直接从store buffer中读取，所以能够
+读取到新值。而对于其他CPU来讲是不可见的。</p>
+<ol class="arabic simple">
+<li>在执行store a的CPU1来看，store a和store b是顺序执行的（有序的）。</li>
+<li>在其他CPU中来看，store b早于store a执行，是乱序执行的（乱序的）。因为现在能够读取到b的新值，还读取不到a的新值。</li>
+</ol>
+<p>对于多核环境来讲，在单核时代看似正确的事情，由于多核的环境，对于其他CPU来讲，结果就会出现问题。</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="cp">#on CPU1</span>
+<span class="kt">void</span> <span class="nf">foo</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">store</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="cp">#storestore</span>
+    <span class="n">store</span> <span class="n">b</span><span class="p">,</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cp">#on CPU2</span>
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="n">load</span> <span class="n">r1</span><span class="p">,</span> <span class="n">a</span>
+    <span class="n">load</span> <span class="n">r2</span><span class="p">,</span> <span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>如果在store a和store b之间加上一个#storestore内存屏障，那么问题就能解决了。</p>
+<p>#storestore屏障保证了屏障后面的store在执行前，屏障前面的store操作都会执行完成，屏障会等待store buffer中的数据
+写到缓存中。这样其他CPU在读取的时候，就能通过缓存读取到最新的数据。此时所有CPU看到的效果都是一样的，</p>
+<div class="admonition note">
+<p class="first admonition-title">注解</p>
+<p>所以根据前面的讨论，内存屏障具有防止指令和保证可见的的功能。其实可见问题应该也是一种由于其他CPU和执行指令的CPU看到
+的顺序不一致的一种乱序行为。内存屏障不光能防止执行指令的CPU的顺序，还能保证其他CPU看到的顺序和本CPU是一致的
+（执行效果在不同CPU看到的都是一致的，视图一致）。</p>
+<p class="last">所以内存屏障具有在多核处理器之间，保证了全局的内存一致性。</p>
+</div>
+</div>
+<div class="section" id="x86-tso">
+<h2>X86内存顺序（TSO）<a class="headerlink" href="#x86-tso" title="永久链接至标题">¶</a></h2>
+<p>In a single-processor system for memory regions defined as write-back cacheable,
+the memory-ordering model respects the following principles</p>
+<ol class="arabic simple">
+<li>Reads are not reordered with other reads.(不支持loadload乱序)</li>
+<li>Writes are not reordered with older reads.(不支持loadstore乱序)</li>
+<li>Writes to memory are not reordered with other writes.(不支持storestore乱序)</li>
+<li><dl class="first docutils">
+<dt>Reads may be reordered with older writes to different locations but not with older</dt>
+<dd>writes to the same location.(对于load核stroe不同内存地址，支持storeload乱序)</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Reads or writes cannot be reordered with I/O instructions, locked instructions,</dt>
+<dd>or serializing instructions.(IO指令、lock指令和串行指令由屏障语义，会阻止这些指令前后的load核store乱序)</dd>
+</dl>
+</li>
+<li>Reads cannot pass earlier LFENCE and MFENCE instructions.</li>
+<li>LFENCE instructions cannot pass earlier reads.</li>
+<li>SFENCE instructions cannot pass earlier writes.</li>
+<li>MFENCE instructions cannot pass earlier reads, writes.</li>
+</ol>
+<p>In a multiple-processor system, the following ordering principles apply:</p>
+<ol class="arabic simple">
+<li>Individual processors use the same ordering principles as in a single-processor system.</li>
+<li>Writes by a single processor are observed in the same order by all processors.</li>
+<li>Writes from an individual processor are NOT ordered with respect to the writes from other processors.</li>
+<li>Memory ordering obeys causality (memory ordering respects transitive visibility).</li>
+<li>Any two stores are seen in a consistent order by processors other than those performing the stores</li>
+<li>Locked instructions have a total order</li>
+</ol>
+<p>x86只支持storeload的乱序。</p>
+</div>
+<div class="section" id="x86">
+<h2>X86具有内存屏障语义的指令<a class="headerlink" href="#x86" title="永久链接至标题">¶</a></h2>
+<p>X86架构中常见具有内存屏障语义的指令有：</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>The locking instructions, the LOCK prefix, and serializing instructions force
+stronger ordering on the processor。
+
+The SFENCE instruction (introduced to the IA-32 architecture in the Pentium III processor)
+and the LFENCE and MFENCE instructions (introduced in the Pentium 4 processor) provide
+memory-ordering and serialization capabilities for specific types of memory operations.
+</pre></div>
+</div>
+</div>
+<div class="section" id="lock">
+<h2>使用加锁指令和LOCK前缀保证有序<a class="headerlink" href="#lock" title="永久链接至标题">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Synchronization</span> <span class="n">mechanisms</span> <span class="ow">in</span> <span class="n">multiple</span><span class="o">-</span><span class="n">processor</span> <span class="n">systems</span> <span class="n">may</span> <span class="n">depend</span> <span class="n">upon</span> <span class="n">a</span>
+<span class="n">strong</span> <span class="n">memory</span><span class="o">-</span><span class="n">ordering</span> <span class="n">model</span><span class="o">.</span> <span class="n">Here</span><span class="p">,</span> <span class="n">a</span> <span class="n">program</span> <span class="n">can</span> <span class="n">use</span> <span class="n">a</span> <span class="n">locking</span> <span class="n">instruction</span> <span class="n">such</span> <span class="k">as</span> <span class="n">the</span> <span class="n">XCHG</span>
+<span class="n">instruction</span> <span class="ow">or</span> <span class="n">the</span> <span class="n">LOCK</span> <span class="n">prefix</span> <span class="n">to</span> <span class="n">ensure</span> <span class="n">that</span> <span class="n">a</span> <span class="n">read</span><span class="o">-</span><span class="n">modify</span><span class="o">-</span><span class="n">write</span> <span class="n">operation</span> <span class="n">on</span> <span class="n">memory</span> <span class="ow">is</span> <span class="n">carried</span>
+<span class="n">out</span> <span class="n">atomically</span><span class="o">.</span> <span class="n">Locking</span> <span class="n">operations</span> <span class="n">typically</span> <span class="n">operate</span> <span class="n">like</span> <span class="n">I</span><span class="o">/</span><span class="n">O</span> <span class="n">operations</span> <span class="ow">in</span> <span class="n">that</span> <span class="n">they</span> <span class="n">wait</span>
+<span class="k">for</span> <span class="nb">all</span> <span class="n">previous</span> <span class="n">instructions</span> <span class="n">to</span> <span class="n">complete</span> <span class="ow">and</span> <span class="k">for</span> <span class="nb">all</span> <span class="n">buffered</span> <span class="n">writes</span> <span class="n">to</span> <span class="n">drain</span> <span class="n">to</span> <span class="n">memory</span>
+</pre></div>
+</div>
+<p>使用加锁指令和LOCK前缀能够保证指令本身的串行，而且会等待之前的所有指令完成，数据写会到内存中，保证了strong ording。</p>
+<p>除了给每条指令加锁之外，还有插入一条额外的和功能无关的加锁指令的方。在这条加锁指令执行之前，
+该指令之前的所有数据操作都生效了，该指令仅仅就是为了保证操作串行的功能，和业务无关。如：</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>lock addl $0,0(%%esp)
+</pre></div>
+</div>
+<p>当执行到lock addl这条指令的时候，该指令之前的store和load指令都完成了，store buffer中数据也写到了内存中。
+lock addl $0,0(%%esp)这条指令是往esp寄存器指向的内存地址加0操作，也就是啥也没干，这条指令只是为了不让指令乱序执行，
+保证了该指令前的其他指令不会跨过lock指令，在该lock指令之后执行，且之前的数据已经写入内存了。</p>
+<p>加锁这种做法缺点就是会影响处理器执行性能。每条指令都加锁，会锁住内存总线或cache line，影响其他核执行指令。</p>
+</div>
+<div class="section" id="id9">
+<h2>使用串行指令来保证有序<a class="headerlink" href="#id9" title="永久链接至标题">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Program</span> <span class="n">synchronization</span> <span class="n">can</span> <span class="n">also</span> <span class="n">be</span> <span class="n">carried</span> <span class="n">out</span> <span class="k">with</span> <span class="n">serializing</span> <span class="n">instructions</span><span class="o">.</span>
+<span class="n">These</span> <span class="n">instructions</span> <span class="n">are</span> <span class="n">typically</span> <span class="n">used</span> <span class="n">at</span> <span class="n">critical</span> <span class="n">procedure</span> <span class="ow">or</span> <span class="n">task</span> <span class="n">boundaries</span> <span class="n">to</span> <span class="n">force</span>
+<span class="n">completion</span> <span class="n">of</span> <span class="nb">all</span> <span class="n">previous</span> <span class="n">instructions</span> <span class="n">before</span> <span class="n">a</span> <span class="n">jump</span> <span class="n">to</span> <span class="n">a</span> <span class="n">new</span> <span class="n">section</span> <span class="n">of</span> <span class="n">code</span> <span class="ow">or</span> <span class="n">a</span> <span class="n">context</span>
+<span class="n">switch</span> <span class="n">occurs</span><span class="o">.</span> <span class="n">Like</span> <span class="n">the</span> <span class="n">I</span><span class="o">/</span><span class="n">O</span> <span class="ow">and</span> <span class="n">locking</span> <span class="n">instructions</span><span class="p">,</span> <span class="n">the</span> <span class="n">processor</span> <span class="n">waits</span> <span class="n">until</span> <span class="nb">all</span> <span class="n">previous</span>
+<span class="n">instructions</span> <span class="n">have</span> <span class="n">been</span> <span class="n">completed</span> <span class="ow">and</span> <span class="nb">all</span> <span class="n">buffered</span> <span class="n">writes</span> <span class="n">have</span> <span class="n">been</span> <span class="n">drained</span> <span class="n">to</span> <span class="n">memory</span> <span class="n">before</span>
+<span class="n">executing</span> <span class="n">the</span> <span class="n">serializing</span> <span class="n">instruction</span><span class="o">.</span>
+</pre></div>
+</div>
 <p>串行指令保证了处理器在执行下一条指令之前，串行指令前面的所有指令都已经完成了，寄存器的更改都完成了，缓存数据都写到内存中去了。
 对于程序开发来说，常见的串行指令是
 <strong>CPUID</strong>，处理器也提供了其他串行指令，但是大部分都是在高优先级中使用，给内核使用的。</p>
-<div class="graphviz"><object data="../_images/graphviz-558e27deca8e3ae8021c0d83b12b491e9170c312.svg" type="image/svg+xml" class="graphviz">
-<p class="warning">digraph atomic1 {
-    subgraph clusterA {
-        label=&quot;线程1&quot;
-        A1 [label=&quot;a=1&quot; shape=&quot;box&quot;]
-        B1 [label=&quot;b=2&quot; shape=&quot;box&quot;]
-        C1 [label=&quot;c=3&quot; shape=&quot;box&quot;]
-        D1 [label=&quot;CPUID&quot; shape=&quot;box&quot;]
-        E1 [label=&quot;done=1&quot; shape=&quot;box&quot;]
-        A1 -&gt; B1 -&gt; C1 -&gt; D1 -&gt; E1
-    }
-}</p></object></div>
-<p>如上图一样，当执行done=1操作的时候，之前数据操作一定全部已经生效了，
-这样其他核就可以根据done这个标志来判断数据是否准备好了。</p>
 </div>
-<div class="section" id="id3">
-<h2>使用内存屏障指令保证操作的串行<a class="headerlink" href="#id3" title="永久链接至标题">¶</a></h2>
+<div class="section" id="id10">
+<h2>使用内存屏障指令保证有序<a class="headerlink" href="#id10" title="永久链接至标题">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>The SFENCE, LFENCE, and MFENCE instructions provide a performance-efficient way of ensuring
+load and store memory ordering between routines that produce weakly-ordered results and
+routines that consume that data. The functions of these instructions are as follows:
+
+• SFENCE — Serializes all store (write) operations that occurred prior to the SFENCE
+instruction in the program instruction stream, but does not affect load operations.
+
+• LFENCE — Serializes all load (read) operations that occurred prior to the LFENCE
+instruction in the program instruction stream, but does not affect store operations.
+
+• MFENCE — Serializes all store and load operations that occurred prior to the
+MFENCE instruction in the program instruction stream.
+
+Note that the SFENCE, LFENCE, and MFENCE instructions provide a more efficient method
+of controlling memory ordering than the CPUID instruction.
+</pre></div>
+</div>
 <p>内存屏障指令（memory-ording instruction）有SFENCE, LFENCE, MFENCE。内存屏障指令提供了更细粒度的内存操作能力</p>
 <ol class="arabic simple">
-<li>SFENCE - 能够串行SFENCE指令前的所有写内存操作，保证SFENCE指令前的写操作全部完成, 但是不影响读操作。</li>
-</ol>
-<div class="graphviz"><object data="../_images/graphviz-29130c50c12feff185ab2cd4d810c6d9fd03bfb8.svg" type="image/svg+xml" class="graphviz">
-<p class="warning">digraph atomic1 {
-    subgraph clusterA {
-        label=&quot;线程1&quot;
-        A1 [label=&quot;a=1&quot; shape=&quot;box&quot;]
-        B1 [label=&quot;b=2&quot; shape=&quot;box&quot;]
-        C1 [label=&quot;c=3&quot; shape=&quot;box&quot;]
-        D1 [label=&quot;SFENCE&quot; shape=&quot;box&quot;]
-        E1 [label=&quot;done=1&quot; shape=&quot;box&quot;]
-        A1 -&gt; B1 -&gt; C1 -&gt; D1 -&gt; E1
-    }
-}</p></object></div>
-<p>在执行SFENCE的时候, 之前的写操作全部完成，</p>
-<ol class="arabic simple" start="2">
+<li>SFENCE - 能够串行SFENCE指令前的所有写内存操作，保证SFENCE指令前的写操作全部完成, 但是不影响读操作。
+在执行SFENCE的时候, 之前的写操作全部完成，</li>
 <li>LFENCE - 能够串行LFENCE指令前的所有读内存操作,保证LFENCE指令前的读操作全部完成, 但是不影响写操作.</li>
 <li>MFENCE - 能够串行MFENCE指令前的所有读写内存操作。</li>
 </ol>
+<p>虽然不支持loadload乱序，且x86没有invalid queue，但还是提供了LFENCE屏障（该屏障有其他用途）：</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Specifically</span><span class="p">,</span> <span class="n">LFENCE</span> <span class="n">does</span> <span class="ow">not</span> <span class="n">execute</span> <span class="n">until</span> <span class="nb">all</span> <span class="n">prior</span> <span class="n">instructions</span> <span class="n">have</span> <span class="n">completed</span> <span class="n">locally</span><span class="p">,</span>
+<span class="ow">and</span> <span class="n">no</span> <span class="n">later</span> <span class="n">instruction</span> <span class="n">begins</span> <span class="n">execution</span> <span class="n">until</span> <span class="n">LFENCE</span> <span class="n">completes</span><span class="o">.</span> <span class="n">As</span> <span class="n">a</span> <span class="n">result</span><span class="p">,</span>
+<span class="n">an</span> <span class="n">instruction</span> <span class="n">that</span> <span class="n">loads</span> <span class="kn">from</span> <span class="nn">memory</span> <span class="ow">and</span> <span class="n">that</span> <span class="n">precedes</span> <span class="n">an</span> <span class="n">LFENCE</span> <span class="n">receives</span> <span class="n">data</span> <span class="kn">from</span> <span class="nn">memory</span>
+<span class="n">prior</span> <span class="n">to</span> <span class="n">completion</span> <span class="n">of</span> <span class="n">the</span> <span class="n">LFENCE</span><span class="o">.</span> <span class="n">An</span> <span class="n">LFENCE</span> <span class="n">that</span> <span class="n">follows</span> <span class="n">an</span> <span class="n">instruction</span> <span class="n">that</span> <span class="n">stores</span> <span class="n">to</span>
+<span class="n">memory</span> <span class="n">might</span> <span class="n">complete</span> <span class="n">before</span> <span class="n">the</span> <span class="n">data</span> <span class="n">being</span> <span class="n">stored</span> <span class="n">have</span> <span class="n">become</span> <span class="n">globally</span> <span class="n">visible</span><span class="o">.</span>
+<span class="n">Instructions</span> <span class="n">following</span> <span class="n">an</span> <span class="n">LFENCE</span> <span class="n">may</span> <span class="n">be</span> <span class="n">fetched</span> <span class="kn">from</span> <span class="nn">memory</span> <span class="n">before</span> <span class="n">the</span> <span class="n">LFENCE</span><span class="p">,</span> <span class="n">but</span>
+<span class="n">they</span> <span class="n">will</span> <span class="ow">not</span> <span class="n">execute</span> <span class="n">until</span> <span class="n">the</span> <span class="n">LFENCE</span> <span class="n">completes</span><span class="o">.</span>
+</pre></div>
 </div>
-<div class="section" id="id4">
-<h2>举例<a class="headerlink" href="#id4" title="永久链接至标题">¶</a></h2>
+</div>
+<div class="section" id="id11">
+<h2>举例<a class="headerlink" href="#id11" title="永久链接至标题">¶</a></h2>
 <p>以java的hotspot虚拟机实现为例,看hotspot是怎么实现屏障的。</p>
 <div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="c1">// A compiler barrier, forcing the C++ compiler to invalidate all memory assumptions</span>
 <span class="k">static</span> <span class="kr">inline</span> <span class="kt">void</span> <span class="nf">compiler_barrier</span><span class="p">()</span> <span class="p">{</span>
@@ -196,8 +459,11 @@ lock addl $0,0(%%esp)这条指令是往esp寄存器指向的内存地址加0操�
 </div>
 <p>在hotspot中，因为屏障指令开销大，是用lock指令来实现屏障的。compiler_barrier是一条空的指令，这个是编译器屏障，
 告诉编译器不要进行指令重排序优化。</p>
+<p>可以看到因为x86只支持storeload乱序，其他类型的乱序都是用编译器屏障。实际执行的时候，不会插入任何额外的指令，因为处理器
+保证了不会乱序。</p>
 <p><strong>参考资料</strong></p>
 <p><a class="reference external" href="https://software.intel.com/en-us/download/intel-64-and-ia-32-architectures-sdm-volume-3a-system-programming-guide-part-1">Intel® 64 and IA-32 Architectures Software Developer’s Manual Volume 3A: System Programming Guide, Part 1</a></p>
+<p><a class="reference external" href="http://www.puppetmastertrading.com/images/hwViewForSwHackers.pdf">Memory Barriers: a Hardware View for Software Hackers</a></p>
 </div>
 </div>
 
@@ -225,10 +491,23 @@ lock addl $0,0(%%esp)这条指令是往esp寄存器指向的内存地址加0操�
 <li class="toctree-l1 current"><a class="reference internal" href="index.html">并发：多核处理器的支持</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="atomic.html">多核处理器的支持：原子性</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">多核处理器的支持：有序性</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#lock">使用加锁指令和LOCK前缀保证操作的串行</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id2">使用串行指令来保证操作的串行</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id3">使用内存屏障指令保证操作的串行</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id4">举例</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#loadload">loadload乱序</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#loadstore">loadstore乱序</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#storestore">storestore乱序</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#storeload">storeload乱序</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id2">为什么会出现乱序</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id3">#loadload内存屏障</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id4">#loadstore内存屏障</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id5">#storestore内存屏障</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id6">#storeload内存屏障</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id7">缓存一致性</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id8">局部可见（有序的）和全局可见（乱序的）</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#x86-tso">X86内存顺序（TSO）</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#x86">X86具有内存屏障语义的指令</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lock">使用加锁指令和LOCK前缀保证有序</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id9">使用串行指令来保证有序</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id10">使用内存屏障指令保证有序</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id11">举例</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="coherency.html">多核处理器的支持：缓存一致性</a></li>

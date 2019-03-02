@@ -1,0 +1,180 @@
+LockSupport.park原理
+===========================
+
+.. note::
+
+    jdk11，jvm为hotspot，硬件和系统平台为x86/linux
+
+park
+--------------
+
+LockSupport.park()
+
+.. code-block:: java
+
+    public static void park() {
+        U.park(false, 0L);
+    }
+
+    public static void parkNanos(long nanos) {
+        if (nanos > 0)
+            U.park(false, nanos);
+    }
+
+    public static void parkUntil(long deadline) {
+        U.park(true, deadline);
+    }
+
+可以看到LockSupport调用了Unsafe，Unsafe.park是一个JNI方法：
+
+.. code-block:: c++
+    :emphasize-lines: 5
+
+    // Unsafe.cpp
+    UNSAFE_ENTRY(void, Unsafe_Park(JNIEnv *env, jobject unsafe, jboolean isAbsolute, jlong time)) {
+    ...
+    JavaThreadParkedState jtps(thread, time != 0); // 设置线程状态
+    thread->parker()->park(isAbsolute != 0, time);
+    ...
+    } UNSAFE_END
+
+每一个JavaThread对象都有一个_parker属性, 该属性是一个Parker对象。
+
+.. code-block:: c++
+
+    // thread.cpp
+    class JavaThread: Thread{
+        ...
+        private:
+            Parker*    _parker;
+        public:
+            Parker*     parker() { return _parker; }
+        ...
+    }
+
+    // thread.cpp
+    void JavaThread::initialize() {
+
+        ...
+
+        _parker = Parker::Allocate(this);
+
+        ...
+    }
+
+    // parker.hpp
+    class Parker : public os::PlatformParker {
+        private:
+            volatile int _counter ;
+            Parker * FreeNext ;
+            JavaThread * AssociatedWith ; // Current association
+        ...
+        public:
+            void park(bool isAbsolute, jlong time);
+            void unpark();
+        ...
+    };
+
+    // os_posix.hpp
+    class PlatformParker : public CHeapObj<mtInternal> {
+        ...
+        int _cur_index;  // which cond is in use: -1, 0, 1
+        pthread_mutex_t _mutex[1];
+        pthread_cond_t  _cond[2]; // one for relative times and one for absolute
+        ...
+    };
+
+.. graphviz::
+
+   digraph park {
+       rankdir = "LR"
+       A [shape = "record" label=" ...| <f1> eetop|...| tid |..." xlabel="oop(java.lang.Thread)"]
+       B [shape = "record" label=" ...| <f1> _osthread | <f3> _parker | <f2> _threadObj|..." xlabel="JavaThread"]
+       C [shape = "record" label=" ...| _thread_id| ... " xlabel="OSThread"]
+       D [shape = "record" label=" ...| _mutex | _cond | _counter | <f1> AssociatedWith |... " xlabel="Parker"]
+       A:f1 -> B
+       B:f1 -> C
+       B:f2 -> A
+       B:f3 -> D
+       D:f1 -> B
+   }
+
+所以最终调用到Park对象的park方法了：
+
+.. code-block:: c++
+    :emphasize-lines: 27,31
+
+    // os_posix.cpp
+    void Parker::park(bool isAbsolute, jlong time) {
+
+        ...
+
+        Thread* thread = Thread::current();
+        JavaThread *jt = (JavaThread *)thread;
+
+        // 如果当前线程处于中断状态，则park直接返回。
+        if (Thread::is_interrupted(thread, false)) {
+            return;
+        }
+
+        ...
+
+        // 尝试获取锁,成功则继续往下走
+        if (Thread::is_interrupted(thread, false) ||
+                pthread_mutex_trylock(_mutex) != 0) {
+            return;
+        }
+
+        ...
+
+        // 重点在这里
+        if (time == 0) {
+            _cur_index = REL_INDEX; // arbitrary choice when not timed
+            status = pthread_cond_wait(&_cond[_cur_index], _mutex);
+        }
+        else {
+            _cur_index = isAbsolute ? ABS_INDEX : REL_INDEX;
+            status = pthread_cond_timedwait(&_cond[_cur_index], _mutex, &absTime);
+        }
+
+        ...
+
+        // 解锁
+        status = pthread_mutex_unlock(_mutex);
+
+        ...
+    }
+
+在Linux下, LockSupport.park是通过调用pthread_cond_wait（等待条件变量）和pthread_cond_timedwait实现阻塞的。
+对于time=0的时候，park一直阻塞在pthread_cond_wait，直到有线程调用了pthread_cond_signal。对于time不为
+0的情况，park阻塞在pthread_cond_timedwait，直到时间超时或者有线程调用了pthread_cond_signal。
+
+可以看到LockSupport.park是利用了Linux下的线程控制方法来实现线程阻塞的。
+调用park就是把该线程阻塞在parker对象中的条件变量上。
+
+unpark
+--------------
+
+.. code-block:: c++
+    :emphasize-lines: 13
+
+    // os_posix.cpp
+    void Parker::unpark() {
+        int status = pthread_mutex_lock(_mutex);
+ 
+        const int s = _counter;
+        _counter = 1;
+        // must capture correct index before unlocking
+        int index = _cur_index;
+        status = pthread_mutex_unlock(_mutex);
+
+        if (s < 1 && index != -1) {
+            // thread is definitely parked
+            status = pthread_cond_signal(&_cond[index]);
+        }
+    }
+
+可以看到unpark就是调用了pthread_cond_signal给阻塞在这个条件变量上的线程，这样java线程就不会阻塞了。
+
+只要能够得到阻塞线程的parker对象，然后调用pthread_cond_signal就可以唤醒阻塞在parker对象中的条件变量上的该线程。
+java中的中断就是用的这个机制。

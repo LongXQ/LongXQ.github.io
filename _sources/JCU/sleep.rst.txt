@@ -1,0 +1,264 @@
+Thread.sleep原理
+=======================
+
+LockSupport.park是使线程阻塞在该线程的Parker对象上（具体是阻塞在该Parker对象上的条件变量上），Thread.sleep和LockSupport.park类似，
+是阻塞在一个ParkEvent对象上。
+
+ParkEvent对象和Parker对象原理类似，它里面也包含了条件变量和锁，使线程阻塞在上面。
+也是利用了pthread_cond_wait、pthread_cond_timedwait和pthread_cond_signal来实现线程的阻塞和唤醒。
+
+.. code-block:: c++
+
+    // thread.hpp
+    class JavaThread: Thread{
+
+        ...
+
+        Parker*    _parker;
+
+        ...
+
+        ParkEvent * _SleepEvent;               // for Thread.sleep
+
+        ...
+    }
+
+    // park.hpp
+    class ParkEvent : public os::PlatformEvent {
+        
+        ...
+
+        // Current association
+        Thread * AssociatedWith ;
+
+        ...
+
+    }
+
+    // os_posix.hpp
+    class PlatformEvent : public CHeapObj<mtInternal> {
+
+        volatile int _event;       // Event count/permit: -1, 0 or 1
+        volatile int _nParked;     // Indicates if associated thread is blocked: 0 or 1
+        pthread_mutex_t _mutex[1]; // Native mutex for locking
+        pthread_cond_t  _cond[1];  // Native condition variable for blocking
+
+        void park();
+        int  park(jlong millis);
+        void unpark();
+
+        // Use caution with reset() and fired() -- they may require MEMBARs
+        void reset() { _event = 0; }
+        int  fired() { return _event; }
+    };
+
+.. graphviz::
+
+   digraph sleep {
+       rankdir = "LR"
+       A [shape = "record" label=" ...| <f1> eetop|...| tid |..." xlabel="oop(java.lang.Thread)"]
+       B [shape = "record" label=" ...| <f1> _osthread | <f3> _parker | <f4> _SleepEvent | <f2> _threadObj|..." xlabel="JavaThread"]
+       C [shape = "record" label=" ...| _thread_id| ... " xlabel="OSThread"]
+       D [shape = "record" label=" ...| _mutex | _cond | _counter | <f1> AssociatedWith |... " xlabel="Parker"]
+       E [shape = "record" label=" ...|_event |_nParked| _mutex | _cond| <f1> AssociatedWith |... " xlabel="ParkEvent"]
+       A:f1 -> B
+       B:f1 -> C
+       B:f2 -> A
+       B:f3 -> D
+       D:f1 -> B
+       B:f4 -> E
+       E:f1 -> B
+   }
+
+Thread.sleep入口在src/hotspot/share/prims/jvm.cpp：
+
+.. code-block:: c++
+    :emphasize-lines: 16,20
+
+    // jvm.cpp：
+    JVM_ENTRY(void, JVM_Sleep(JNIEnv* env, jclass threadClass, jlong millis))
+
+        ...
+
+        // 如果处于中断状态,抛出InterruptedException异常
+        if (Thread::is_interrupted (THREAD, true) && !HAS_PENDING_EXCEPTION) {
+            THROW_MSG(vmSymbols::java_lang_InterruptedException(), "sleep interrupted");
+        }
+
+        // 设置线程的状态为SLEEPING
+        JavaThreadSleepState jtss(thread);
+
+        ...
+
+        if (millis == 0) {
+            os::naked_yield();
+        } else {
+            ThreadState old_state = thread->osthread()->get_state();
+            thread->osthread()->set_state(SLEEPING);
+            if (os::sleep(thread, millis, true) == OS_INTRPT) {
+                    ...
+                    // 如果sleep被中断了,则抛出InterruptedException异常
+                    THROW_MSG(vmSymbols::java_lang_InterruptedException(), "sleep interrupted");
+                }
+            }
+            thread->osthread()->set_state(old_state);
+        }
+
+        ...
+
+上面的逻辑很简单,就是改变线程状态,如果millis时间不为0,则调用os::sleep阻塞线程,然后线程就阻塞在了os::sleep这里,
+如果后续被中断了,则抛出异常.所以Thread.sleep的核心就是os::sleep。
+
+.. code-block:: c++
+    :emphasize-lines: 15,28,38,56,59
+
+    int os::sleep(Thread* thread, jlong millis, bool interruptible) {
+
+        ...
+
+        ParkEvent * const slp = thread->_SleepEvent ;
+        slp->reset() ;
+        // 保证slp->reset()这个操作立即对所有线程可见
+        OrderAccess::fence() ;
+
+        if (interruptible) {
+            jlong prevtime = javaTimeNanos();
+
+            for (;;) {
+                // 判断park是否是由于中断返回的。如果是，那么上层函数会抛出InterruptedException异常
+                if (os::is_interrupted(thread, true)) {
+                    return OS_INTRPT;
+                }
+
+                jlong newtime = javaTimeNanos();
+
+                if (newtime - prevtime < 0) {
+                    ...
+                } else {
+                    millis -= (newtime - prevtime) / NANOSECS_PER_MILLISEC;
+                }
+
+                // 判断park是否是由于时间超时返回的
+                if (millis <= 0) {
+                    return OS_OK;
+                }
+
+                prevtime = newtime;
+
+                {
+                    ...
+
+                    // 调用park，线程阻塞
+                    slp->park(millis);
+
+                    ...
+                }
+            }
+        } else {
+            jlong prevtime = javaTimeNanos();
+
+            for (;;) {
+                jlong newtime = javaTimeNanos();
+
+                if (newtime - prevtime < 0) {
+                    ...
+                } else {
+                    millis -= (newtime - prevtime) / NANOSECS_PER_MILLISEC;
+                }
+
+                // 由于是不可中断，只需要在这里判断时间是否超时就可以
+                if (millis <= 0) break ;
+
+                prevtime = newtime;
+                slp->park(millis);
+            }
+            return OS_OK ;
+        }
+    }
+
+对于可中断的情况，会调用ParkEvent.park阻塞线程, 当从park函数返回的时候,因为还处在这个for循环中,
+会判断时间是由于超时返回的还是由于中断提前返回的.如果是由于中断返回的,则调用os::sleep的方法会
+抛出InterruptedException异常。
+
+不可中断的情况类似，只是少了一个是否是中断的判断。
+
+ParkEvent.park
+----------------------
+
+os::sleep最终是调用ParkEvent.park方法来阻塞线程的
+
+.. code-block:: c++
+    :emphasize-lines: 23
+
+    int os::PlatformEvent::park(jlong millis) {
+        int v;
+        // atomically decrement _event
+        // 使用CAS指令对_event减一
+        // _event只有1,0和-1三种状态, 初始值为0
+        // 1 =>  0 : pass - return immediately
+        // 0 => -1 : block; then set _event to 0 before returning
+        for (;;) {
+            v = _event;
+            if (Atomic::cmpxchg(v - 1, &_event, v) == v) break;
+        }
+
+        // _event减一之前的值为0的,说明是0 -> -1的转变,要阻塞该线程.
+        // 一个ParkEvent只能有一个parker,但是可以有多个unparker.
+        // 如果有多个地方同时调用了park,那么只有第一个减_event的为-1的才会执行下面的代码,其他的情况直接退出.
+        if (v == 0) { 
+            int ret = OS_TIMEOUT;
+            int status = pthread_mutex_lock(_mutex);
+
+            // _nParked初始值为0，有线程阻塞在该ParkEvent上，则加一
+            ++_nParked;
+            while (_event < 0) {
+                status = pthread_cond_timedwait(_cond, _mutex, &abst);
+                // 如果是由于超时的话,直接退出这个循环,
+                // 如果时间还没到就退出了且_event<0,那么继续阻塞,
+                // 因为如果是signal唤醒了该线程的话(调用unpark),那么_event为1.
+                if (status == ETIMEDOUT) break;
+            }
+            --_nParked;
+
+            if (_event >= 0) {
+                ret = OS_OK;
+            }
+
+            _event = 0;
+            status = pthread_mutex_unlock(_mutex);
+
+            OrderAccess::fence();
+            return ret;
+        }
+
+        return OS_OK;
+    }
+
+可以看到Thread.sleep最终也是调用pthread_cond_timedwait实现线程阻塞的。
+
+ParkEvent.unpark
+-----------------
+
+相反，unpark就是用来唤醒阻塞在ParkEvent中信号量的线程。
+
+.. code-block:: c++
+    :emphasize-lines: 13
+
+    void os::PlatformEvent::unpark() {
+        // xchg会返回赋值之前的值。
+        // 如果之前_event的值为0和1,说明没有park发生,直接返回
+        // 如果之前_event的值为-1, 说明有park发生
+        if (Atomic::xchg(1, &_event) >= 0) return;
+
+        int status = pthread_mutex_lock(_mutex);
+        int anyWaiters = _nParked;
+        status = pthread_mutex_unlock(_mutex);
+
+        if (anyWaiters != 0) {
+            // 唤醒阻塞在该ParkEvent上的线程
+            status = pthread_cond_signal(_cond);
+        }
+    }
+
+可以看到，只要anyWaiter不为0，也就是说明有线程调用了ParkEvent.park阻塞在了信号量上，那么unpark
+就会调用pthread_cond_signal唤醒线程。

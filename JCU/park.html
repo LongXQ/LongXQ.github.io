@@ -1,0 +1,277 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>LockSupport.park原理 &#8212; CC 0.1 文档</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <script type="text/javascript" src="../_static/translations.js"></script>
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="next" title="Thread.sleep原理" href="sleep.html" />
+    <link rel="prev" title="Java线程模型" href="thread.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="locksupport-park">
+<h1>LockSupport.park原理<a class="headerlink" href="#locksupport-park" title="永久链接至标题">¶</a></h1>
+<div class="admonition note">
+<p class="first admonition-title">注解</p>
+<p class="last">jdk11，jvm为hotspot，硬件和系统平台为x86/linux</p>
+</div>
+<div class="section" id="park">
+<h2>park<a class="headerlink" href="#park" title="永久链接至标题">¶</a></h2>
+<p>LockSupport.park()</p>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">park</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">U</span><span class="o">.</span><span class="na">park</span><span class="o">(</span><span class="kc">false</span><span class="o">,</span> <span class="mi">0</span><span class="n">L</span><span class="o">);</span>
+<span class="o">}</span>
+
+<span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">parkNanos</span><span class="o">(</span><span class="kt">long</span> <span class="n">nanos</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">nanos</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span>
+        <span class="n">U</span><span class="o">.</span><span class="na">park</span><span class="o">(</span><span class="kc">false</span><span class="o">,</span> <span class="n">nanos</span><span class="o">);</span>
+<span class="o">}</span>
+
+<span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">parkUntil</span><span class="o">(</span><span class="kt">long</span> <span class="n">deadline</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">U</span><span class="o">.</span><span class="na">park</span><span class="o">(</span><span class="kc">true</span><span class="o">,</span> <span class="n">deadline</span><span class="o">);</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+<p>可以看到LockSupport调用了Unsafe，Unsafe.park是一个JNI方法：</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="c1">// Unsafe.cpp</span>
+<span class="n">UNSAFE_ENTRY</span><span class="p">(</span><span class="kt">void</span><span class="p">,</span> <span class="n">Unsafe_Park</span><span class="p">(</span><span class="n">JNIEnv</span> <span class="o">*</span><span class="n">env</span><span class="p">,</span> <span class="n">jobject</span> <span class="n">unsafe</span><span class="p">,</span> <span class="n">jboolean</span> <span class="n">isAbsolute</span><span class="p">,</span> <span class="n">jlong</span> <span class="n">time</span><span class="p">))</span> <span class="p">{</span>
+<span class="p">...</span>
+<span class="n">JavaThreadParkedState</span> <span class="n">jtps</span><span class="p">(</span><span class="kr">thread</span><span class="p">,</span> <span class="n">time</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">);</span> <span class="c1">// 设置线程状态</span>
+<span class="hll"><span class="kr">thread</span><span class="o">-&gt;</span><span class="n">parker</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">park</span><span class="p">(</span><span class="n">isAbsolute</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">time</span><span class="p">);</span>
+</span><span class="p">...</span>
+<span class="p">}</span> <span class="n">UNSAFE_END</span>
+</pre></div>
+</div>
+<p>每一个JavaThread对象都有一个_parker属性, 该属性是一个Parker对象。</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="c1">// thread.cpp</span>
+<span class="k">class</span> <span class="nc">JavaThread</span><span class="o">:</span> <span class="n">Thread</span><span class="p">{</span>
+    <span class="p">...</span>
+    <span class="k">private</span><span class="o">:</span>
+        <span class="n">Parker</span><span class="o">*</span>    <span class="n">_parker</span><span class="p">;</span>
+    <span class="k">public</span><span class="o">:</span>
+        <span class="n">Parker</span><span class="o">*</span>     <span class="n">parker</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="n">_parker</span><span class="p">;</span> <span class="p">}</span>
+    <span class="p">...</span>
+<span class="p">}</span>
+
+<span class="c1">// thread.cpp</span>
+<span class="kt">void</span> <span class="n">JavaThread</span><span class="o">::</span><span class="n">initialize</span><span class="p">()</span> <span class="p">{</span>
+
+    <span class="p">...</span>
+
+    <span class="n">_parker</span> <span class="o">=</span> <span class="n">Parker</span><span class="o">::</span><span class="n">Allocate</span><span class="p">(</span><span class="k">this</span><span class="p">);</span>
+
+    <span class="p">...</span>
+<span class="p">}</span>
+
+<span class="c1">// parker.hpp</span>
+<span class="k">class</span> <span class="nc">Parker</span> <span class="o">:</span> <span class="k">public</span> <span class="n">os</span><span class="o">::</span><span class="n">PlatformParker</span> <span class="p">{</span>
+    <span class="k">private</span><span class="o">:</span>
+        <span class="k">volatile</span> <span class="kt">int</span> <span class="n">_counter</span> <span class="p">;</span>
+        <span class="n">Parker</span> <span class="o">*</span> <span class="n">FreeNext</span> <span class="p">;</span>
+        <span class="n">JavaThread</span> <span class="o">*</span> <span class="n">AssociatedWith</span> <span class="p">;</span> <span class="c1">// Current association</span>
+    <span class="p">...</span>
+    <span class="k">public</span><span class="o">:</span>
+        <span class="kt">void</span> <span class="n">park</span><span class="p">(</span><span class="kt">bool</span> <span class="n">isAbsolute</span><span class="p">,</span> <span class="n">jlong</span> <span class="n">time</span><span class="p">);</span>
+        <span class="kt">void</span> <span class="nf">unpark</span><span class="p">();</span>
+    <span class="p">...</span>
+<span class="p">};</span>
+
+<span class="c1">// os_posix.hpp</span>
+<span class="k">class</span> <span class="nc">PlatformParker</span> <span class="o">:</span> <span class="k">public</span> <span class="n">CHeapObj</span><span class="o">&lt;</span><span class="n">mtInternal</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="p">...</span>
+    <span class="kt">int</span> <span class="n">_cur_index</span><span class="p">;</span>  <span class="c1">// which cond is in use: -1, 0, 1</span>
+    <span class="n">pthread_mutex_t</span> <span class="n">_mutex</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+    <span class="n">pthread_cond_t</span>  <span class="n">_cond</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span> <span class="c1">// one for relative times and one for absolute</span>
+    <span class="p">...</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<div class="graphviz"><object data="../_images/graphviz-4d0f64ee6b7b5dcbec886a2af08188fd082a0a02.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph park {
+    rankdir = &quot;LR&quot;
+    A [shape = &quot;record&quot; label=&quot; ...| &lt;f1&gt; eetop|...| tid |...&quot; xlabel=&quot;oop(java.lang.Thread)&quot;]
+    B [shape = &quot;record&quot; label=&quot; ...| &lt;f1&gt; _osthread | &lt;f3&gt; _parker | &lt;f2&gt; _threadObj|...&quot; xlabel=&quot;JavaThread&quot;]
+    C [shape = &quot;record&quot; label=&quot; ...| _thread_id| ... &quot; xlabel=&quot;OSThread&quot;]
+    D [shape = &quot;record&quot; label=&quot; ...| _mutex | _cond | _counter | &lt;f1&gt; AssociatedWith |... &quot; xlabel=&quot;Parker&quot;]
+    A:f1 -&gt; B
+    B:f1 -&gt; C
+    B:f2 -&gt; A
+    B:f3 -&gt; D
+    D:f1 -&gt; B
+}</p></object></div>
+<p>所以最终调用到Park对象的park方法了：</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="c1">// os_posix.cpp</span>
+<span class="kt">void</span> <span class="n">Parker</span><span class="o">::</span><span class="n">park</span><span class="p">(</span><span class="kt">bool</span> <span class="n">isAbsolute</span><span class="p">,</span> <span class="n">jlong</span> <span class="n">time</span><span class="p">)</span> <span class="p">{</span>
+
+    <span class="p">...</span>
+
+    <span class="n">Thread</span><span class="o">*</span> <span class="kr">thread</span> <span class="o">=</span> <span class="n">Thread</span><span class="o">::</span><span class="n">current</span><span class="p">();</span>
+    <span class="n">JavaThread</span> <span class="o">*</span><span class="n">jt</span> <span class="o">=</span> <span class="p">(</span><span class="n">JavaThread</span> <span class="o">*</span><span class="p">)</span><span class="kr">thread</span><span class="p">;</span>
+
+    <span class="c1">// 如果当前线程处于中断状态，则park直接返回。</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">Thread</span><span class="o">::</span><span class="n">is_interrupted</span><span class="p">(</span><span class="kr">thread</span><span class="p">,</span> <span class="nb">false</span><span class="p">))</span> <span class="p">{</span>
+        <span class="k">return</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="p">...</span>
+
+    <span class="c1">// 尝试获取锁,成功则继续往下走</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">Thread</span><span class="o">::</span><span class="n">is_interrupted</span><span class="p">(</span><span class="kr">thread</span><span class="p">,</span> <span class="nb">false</span><span class="p">)</span> <span class="o">||</span>
+            <span class="n">pthread_mutex_trylock</span><span class="p">(</span><span class="n">_mutex</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="p">...</span>
+
+    <span class="c1">// 重点在这里</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">time</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">_cur_index</span> <span class="o">=</span> <span class="n">REL_INDEX</span><span class="p">;</span> <span class="c1">// arbitrary choice when not timed</span>
+<span class="hll">        <span class="n">status</span> <span class="o">=</span> <span class="n">pthread_cond_wait</span><span class="p">(</span><span class="o">&amp;</span><span class="n">_cond</span><span class="p">[</span><span class="n">_cur_index</span><span class="p">],</span> <span class="n">_mutex</span><span class="p">);</span>
+</span>    <span class="p">}</span>
+    <span class="k">else</span> <span class="p">{</span>
+        <span class="n">_cur_index</span> <span class="o">=</span> <span class="n">isAbsolute</span> <span class="o">?</span> <span class="nl">ABS_INDEX</span> <span class="p">:</span> <span class="n">REL_INDEX</span><span class="p">;</span>
+<span class="hll">        <span class="n">status</span> <span class="o">=</span> <span class="n">pthread_cond_timedwait</span><span class="p">(</span><span class="o">&amp;</span><span class="n">_cond</span><span class="p">[</span><span class="n">_cur_index</span><span class="p">],</span> <span class="n">_mutex</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">absTime</span><span class="p">);</span>
+</span>    <span class="p">}</span>
+
+    <span class="p">...</span>
+
+    <span class="c1">// 解锁</span>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">pthread_mutex_unlock</span><span class="p">(</span><span class="n">_mutex</span><span class="p">);</span>
+
+    <span class="p">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>在Linux下, LockSupport.park是通过调用pthread_cond_wait（等待条件变量）和pthread_cond_timedwait实现阻塞的。
+对于time=0的时候，park一直阻塞在pthread_cond_wait，直到有线程调用了pthread_cond_signal。对于time不为
+0的情况，park阻塞在pthread_cond_timedwait，直到时间超时或者有线程调用了pthread_cond_signal。</p>
+<p>可以看到LockSupport.park是利用了Linux下的线程控制方法来实现线程阻塞的。
+调用park就是把该线程阻塞在parker对象中的条件变量上。</p>
+</div>
+<div class="section" id="unpark">
+<h2>unpark<a class="headerlink" href="#unpark" title="永久链接至标题">¶</a></h2>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="c1">// os_posix.cpp</span>
+<span class="kt">void</span> <span class="n">Parker</span><span class="o">::</span><span class="n">unpark</span><span class="p">()</span> <span class="p">{</span>
+    <span class="kt">int</span> <span class="n">status</span> <span class="o">=</span> <span class="n">pthread_mutex_lock</span><span class="p">(</span><span class="n">_mutex</span><span class="p">);</span>
+
+    <span class="k">const</span> <span class="kt">int</span> <span class="n">s</span> <span class="o">=</span> <span class="n">_counter</span><span class="p">;</span>
+    <span class="n">_counter</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="c1">// must capture correct index before unlocking</span>
+    <span class="kt">int</span> <span class="n">index</span> <span class="o">=</span> <span class="n">_cur_index</span><span class="p">;</span>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">pthread_mutex_unlock</span><span class="p">(</span><span class="n">_mutex</span><span class="p">);</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">s</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="n">index</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// thread is definitely parked</span>
+<span class="hll">        <span class="n">status</span> <span class="o">=</span> <span class="n">pthread_cond_signal</span><span class="p">(</span><span class="o">&amp;</span><span class="n">_cond</span><span class="p">[</span><span class="n">index</span><span class="p">]);</span>
+</span>    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>可以看到unpark就是调用了pthread_cond_signal给阻塞在这个条件变量上的线程，这样java线程就不会阻塞了。</p>
+<p>只要能够得到阻塞线程的parker对象，然后调用pthread_cond_signal就可以唤醒阻塞在parker对象中的条件变量上的该线程。
+java中的中断就是用的这个机制。</p>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">CC</a></h1>
+
+
+
+<p class="blurb">日常总结分享</p>
+
+
+
+
+
+
+<h3>导航</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../link.html">网络资源</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../并发/index.html">并发编程：多核处理器的支持</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Java并发编程</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="atomic.html">Java对原子操作和内存屏障的封装</a></li>
+<li class="toctree-l2"><a class="reference internal" href="thread.html">Java线程模型</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">LockSupport.park原理</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#park">park</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#unpark">unpark</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="sleep.html">Thread.sleep原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interrupt.html">Thread.interrupt原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="synchronized.html">synchronized原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wait.html">Object.wait原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="blockAndInterruptAndWake.html">阻塞、唤醒和中断总结</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../rst.html">rst示例</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../graphviz.html">graphviz</a></li>
+</ul>
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3>快速搜索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="转向" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, longxiongqiu.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/JCU/park.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

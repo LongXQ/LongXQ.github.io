@@ -1,0 +1,99 @@
+Thread.interrupt原理
+=========================
+
+.. code-block:: c++
+    :emphasize-lines: 10
+
+    // jvm.cpp
+    JVM_ENTRY(void, JVM_Interrupt(JNIEnv* env, jobject jthread))
+        JavaThread* receiver = NULL;
+        // 根据jthread得到该线程的JavaThread对象
+        bool is_alive = tlh.cv_internal_thread_to_JavaThread(jthread, &receiver, NULL);
+        if (is_alive) {
+            // jthread refers to a live JavaThread.
+            Thread::interrupt(receiver);
+        }
+    JVM_END
+
+    // thread.cpp
+    void Thread::interrupt(Thread* thread) {
+        os::interrupt(thread);
+    }
+
+Thread.interrupt调用了JavaThread中的interrupt方法,最终调用了os::interrupt.
+
+.. code-block:: c++
+    :emphasize-lines: 7,10,14,17
+
+    void os::interrupt(Thread* thread) {
+
+        OSThread* osthread = thread->osthread();
+
+        if (!osthread->interrupted()) {
+            // 设置线程的中断状态
+            osthread->set_interrupted(true);
+            OrderAccess::fence();
+            ParkEvent * const slp = thread->_SleepEvent ;
+            // 唤醒由于调用了Thread.sleep而阻塞在ParkEvent上的线程
+            if (slp != NULL) slp->unpark() ;
+        }
+
+        // 唤醒由于调用了LockSupport.park而阻塞在Parker上的线程
+        if (thread->is_Java_thread())
+            ((JavaThread*)thread)->parker()->unpark();
+
+        // 唤醒由于使用了synchronized而阻塞在ParkEvent上的线程
+        ParkEvent * ev = thread->_ParkEvent ;
+        if (ev != NULL) ev->unpark() ;
+    }
+
+可以看到interrupt首先设置了线程的中断状态，
+然后根据不同类型的park，调用了对应的unpark唤醒这些阻塞在对应条件变量上的线程。
+其中synchronized阻塞原理也和Thread.sleep和LockSupport.park类似。
+
+I/O中断
+--------------------
+
+.. code-block:: java
+    :emphasize-lines: 9,10,17
+
+    public void interrupt() {
+        if (this != Thread.currentThread()) {
+            checkAccess();
+
+            // thread may be blocked in an I/O operation
+            synchronized (blockerLock) {
+                Interruptible b = blocker;
+                if (b != null) {
+                    interrupt0();  // set interrupt status
+                    b.interrupt(this);
+                    return;
+                }
+            }
+        }
+
+        // set interrupt status
+        interrupt0();
+    }
+
+上面是java中Thread.interrupt源码，其中interrupt0就是前面讨论的JVM_Interrupt，在JVM中的中断实现。
+
+而b.interrupt(this)是给I/O中断使用的，目的是把一些阻塞I/O操作集成到java的中断框架中，使中断也能够中断这些
+I/O。
+
+I/O操作如果为了能够被中断，那么先给自己注册一个Interruptible对象:
+
+.. code-block:: java
+
+    static void blockedOn(Interruptible b) {
+        Thread me = Thread.currentThread();
+        synchronized (me.blockerLock) {
+            me.blocker = b;
+        }
+    }
+然后在调用Thread.interrupt时候就会调用这个Interruptible对象的interrupt方法来完成对自己的中断。
+
+>>> b.interrupt(this);
+
+I/O操作可以自定义这个Interruptible的interrupt方法，比如通过关闭I/O管道来完成中断，这样线程就不会阻塞在
+I/O操作了。具体例子可参考NIO的一些实现。

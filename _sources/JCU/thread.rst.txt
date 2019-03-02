@@ -1,0 +1,413 @@
+Java线程模型
+==================================
+
+.. note::
+
+    jdk11，jvm为hotspot，硬件和系统平台为x86/linux
+
+`Hotspot线程模型 <http://openjdk.java.net/groups/hotspot/docs/RuntimeOverview.html#Thread%20Management|outline>`_
+中大致描述了Hotspot中线程的模型。
+
+线程状态
+----------------
+
+JVM中java线程状态：
+
+.. code-block:: c++
+
+    enum ThreadStatus {
+        NEW                      = 0,
+        RUNNABLE                 = JVMTI_THREAD_STATE_ALIVE +          // runnable / running
+                                   JVMTI_THREAD_STATE_RUNNABLE,
+        SLEEPING                 = JVMTI_THREAD_STATE_ALIVE +          // Thread.sleep()
+                                   JVMTI_THREAD_STATE_WAITING +
+                                   JVMTI_THREAD_STATE_WAITING_WITH_TIMEOUT +
+                                   JVMTI_THREAD_STATE_SLEEPING,
+        IN_OBJECT_WAIT           = JVMTI_THREAD_STATE_ALIVE +          // Object.wait()
+                                   JVMTI_THREAD_STATE_WAITING +
+                                   JVMTI_THREAD_STATE_WAITING_INDEFINITELY +
+                                   JVMTI_THREAD_STATE_IN_OBJECT_WAIT,
+        IN_OBJECT_WAIT_TIMED     = JVMTI_THREAD_STATE_ALIVE +          // Object.wait(long)
+                                   JVMTI_THREAD_STATE_WAITING +
+                                   JVMTI_THREAD_STATE_WAITING_WITH_TIMEOUT +
+                                   JVMTI_THREAD_STATE_IN_OBJECT_WAIT,
+        PARKED                   = JVMTI_THREAD_STATE_ALIVE +          // LockSupport.park()
+                                   JVMTI_THREAD_STATE_WAITING +
+                                   JVMTI_THREAD_STATE_WAITING_INDEFINITELY +
+                                   JVMTI_THREAD_STATE_PARKED,
+        PARKED_TIMED             = JVMTI_THREAD_STATE_ALIVE +          // LockSupport.park(long)
+                                   JVMTI_THREAD_STATE_WAITING +
+                                   JVMTI_THREAD_STATE_WAITING_WITH_TIMEOUT +
+                                   JVMTI_THREAD_STATE_PARKED,
+        BLOCKED_ON_MONITOR_ENTER = JVMTI_THREAD_STATE_ALIVE +          // (re-)entering a synchronization block
+                                   JVMTI_THREAD_STATE_BLOCKED_ON_MONITOR_ENTER,
+        TERMINATED               = JVMTI_THREAD_STATE_TERMINATED
+    };
+
+java代码中线程状态：
+
+.. code-block:: java
+
+    public enum State {
+        NEW,
+        RUNNABLE,
+        BLOCKED,
+        WAITING,
+        TIMED_WAITING,
+        TERMINATED;
+    }
+
+线程状态保存在Thread对象的threadStatus属性中。
+
+.. code-block:: java
+
+    /*
+     * Java thread status for tools, default indicates thread 'not yet started'
+     */
+    private volatile int threadStatus;
+
+可以看到java代码中和jvm中线程状态不一样，它们之间的转换由Thread::getState函数实现
+
+.. code-block:: java
+
+    // Thread.java
+    public State getState() {
+        // get current thread state
+        return jdk.internal.misc.VM.toThreadState(threadStatus);
+    }
+
+    /**
+     * Returns Thread.State for the given threadStatus
+     */
+    public static Thread.State toThreadState(int threadStatus) {
+        if ((threadStatus & JVMTI_THREAD_STATE_RUNNABLE) != 0) {
+            return RUNNABLE;
+        } else if ((threadStatus & JVMTI_THREAD_STATE_BLOCKED_ON_MONITOR_ENTER) != 0) {
+            return BLOCKED;
+        } else if ((threadStatus & JVMTI_THREAD_STATE_WAITING_INDEFINITELY) != 0) {
+            return WAITING;
+        } else if ((threadStatus & JVMTI_THREAD_STATE_WAITING_WITH_TIMEOUT) != 0) {
+            return TIMED_WAITING;
+        } else if ((threadStatus & JVMTI_THREAD_STATE_TERMINATED) != 0) {
+            return TERMINATED;
+        } else if ((threadStatus & JVMTI_THREAD_STATE_ALIVE) == 0) {
+            return NEW;
+        } else {
+            return RUNNABLE;
+        }
+    }
+
+1. 如果jvm中线程状态分量中有JVMTI_THREAD_STATE_RUNNABLE，在java代码看到状态就是RUNNABLE。
+2. 如果jvm中线程状态分量中有JVMTI_THREAD_STATE_BLOCKED_ON_MONITOR_ENTER，在java代码看到状态就是BLOCKED。
+
+。。。
+
+线程模型
+--------------
+
+`hotspot中线程模型的介绍 <http://openjdk.java.net/groups/hotspot/docs/RuntimeOverview.html#Thread%20Management|outline>`_:
+
+::
+
+    The basic threading model in Hotspot is a 1:1 mapping between Java threads 
+    (an instance of java.lang.Thread) and native operating system threads. The 
+    native thread is created when the Java thread is started, and is reclaimed once 
+    it terminates. The operating system is responsible for scheduling all threads 
+    and dispatching to any available CPU.
+
+    1. The java.lang.Thread instance that represents a thread in Java code
+
+    2. A JavaThread instance that represents the java.lang.Thread instance inside the VM. 
+       It contains additional information to track the state of the thread. A JavaThread 
+       holds a reference to its associated java.lang.Thread object (as an oop), and the 
+       java.lang.Thread object also stores a reference to its JavaThread (as a raw int). 
+       A JavaThread also holds a reference to its associated OSThread instance.
+
+    3. An OSThread instance represents an operating system thread, and contains additional 
+       operating-system-level information needed to track thread state. The OSThread then 
+       contains a platform specific “handle” to identify the actual thread to the operating 
+       system
+    
+    When a java.lang.Thread is started the VM creates the associated JavaThread and OSThread 
+    objects, and ultimately the native thread. After preparing all of the VM state (such as 
+    thread-local storage and allocation buffers, synchronization objects and so forth) the 
+    native thread is started. The native thread completes initialization and then executes a 
+    start-up method that leads to the execution of the java.lang.Thread object's run() method, 
+    and then, upon its return, terminates the thread after dealing with any uncaught exceptions, 
+    and interacting with the VM to check if termination of this thread requires termination of 
+    the whole VM. Thread termination releases all allocated resources, removes the JavaThread from 
+    the set of known threads, invokes destructors for the OSThread and JavaThread and ultimately 
+    ceases execution when it's initial startup method completes.
+
+和线程相关的主要有三个对象：java.lang.Thread实例（在jvm中就是一个oop对象），JavaThread对象和OSThread对象。
+
+.. code-block:: java
+
+    // src/hotspot/share/runtime/thread.hpp
+    class Thread: public ThreadShadow {
+        ...
+        protected:
+            // OS data associated with the thread
+            OSThread* _osthread;  // Platform-specific thread information
+        ...
+    }
+
+    // src/hotspot/share/runtime/thread.hpp
+    class JavaThread: public Thread {
+        ...
+        private:
+            JavaThread*    _next;                          // The next thread in the Threads list
+            bool           _on_thread_list;                // Is set when this JavaThread is added to the Threads list
+            oop            _threadObj;
+        ...
+    }
+
+    // src/hotspot/share/runtime/osThread.hpp
+    class OSThread: public CHeapObj<mtThread> {
+        ...
+        private:
+            // _thread_id is kernel thread id (similar to LWP id on Solaris). Each
+            // thread has a unique thread_id (BsdThreads or NPTL). It can be used
+            // to access /proc.
+            thread_id_t _thread_id;
+        ...
+    } 
+
+.. graphviz::
+
+   digraph thread {
+       rankdir = "LR"
+       A [shape = "record" label=" ...| <f1> eetop|...| tid |..." xlabel="oop(java.lang.Thread)"]
+       B [shape = "record" label=" ...| <f1> _osthread | ... | <f2> _threadObj|..." xlabel="JavaThread"]
+       C [shape = "record" label=" ...| _thread_id| ... " xlabel="OSThread"]
+       A:f1 -> B
+       B:f1 -> C
+       B:f2 -> A
+   }
+
+BLOCKED状态
+----------------
+
+线程进入synchronized block/method，或者在调用Object.wait后重入synchronized block/method使等待对象的
+monitor lock时候会使线程处于BLOCKED状态，暂停执行后续的代码。
+
+.. code-block:: java
+
+    Object o = new Object();
+    synchronized (o){
+        ...
+        o.wait();
+        synchronized (o){
+            ...
+        }
+        ...
+    }
+
+
+WAITING状态
+-----------------
+
+.. note::
+
+    A thread in the waiting state is waiting for another thread to 
+    perform a particular action.
+    
+    For example, a thread that has called Object.wait()
+    on an object is waiting for another thread to call
+    Object.notify() or Object.notifyAll() on that object. 
+    A thread that has called Thread.join() is waiting for a specified thread to terminate.
+
+三种情况下会使线程出于waiting状态，暂停执行后续的代码：
+
+1. LockSupport.park
+
+.. code-block:: java
+
+    Thread thread1 = new Thread(() -> {
+        LockSupport.park();
+    });
+
+2. Thread.join
+
+.. code-block:: java
+
+    Thread thread1 = new Thread(() -> {
+        ...
+    });
+
+    thread1.join();
+
+3. Object.wait with no timeout
+
+.. code-block:: java
+
+    Object o = new Object();
+    synchronized (o){
+        ...
+        o.wait();
+        ...
+    }
+
+TIMED_WAITING状态
+-----------------
+
+TIMED_WAITING和WAITING差不多，唯一区别就是多了一个时间限制，在时间满足后，继续执行后续代码。
+
+1. Thread.sleep
+
+.. code-block:: java
+
+    Thread thread1 = new Thread(() -> {
+        Thread.sleep(100);
+    });
+
+2. Object.wait(long)
+
+.. code-block:: java
+
+    Object o = new Object();
+    synchronized (o){
+        ...
+        o.wait(100);
+        ...
+    }
+
+3. Thread.join(long)
+
+.. code-block:: java
+
+    Thread thread1 = new Thread(() -> {
+        ...
+    });
+
+    thread1.join(100);
+
+4.  LockSupport.parkNanos或LockSupport.parkUntil
+
+.. code-block:: java
+
+    Thread thread1 = new Thread(() -> {
+        ...
+        LockSupport.parkNanos(100);
+        ...
+    });
+
+
+中断和中断异常
+-------------------
+
+中断一个线程：
+
+.. code-block:: java
+
+    Thread thread1 = new Thread(() -> {
+        ...
+    });
+
+    thread1.interrupt();
+
+如果此时java线程处于不同的状态，对待中断也不一样。
+
+1. 线程处于阻塞状态：由于调用了Object.wait, Thread.sleep, Thread.join而处于阻塞状态。收到中断后，会清除中断
+   状态。然后抛出一个InterruptedException异常。
+
+::
+
+    If this thread is blocked in an invocation of the Object#wait(), Object#wait(long) 
+    wait(long), or Object#wait(long, int) methods of the Object class, or of the 
+    #join(), #join(long), #join(long, int), #sleep(long), or #sleep(long, int),
+    methods of Thread class, then its interrupt status will be cleared and it
+    will receive an InterruptedException.
+
+2. 如果线程阻塞在一个java.nio.channels.InterruptibleChannel上，
+   当收到中断的时候，Channel会被关闭，中断状态会被设置，线程将收到
+   java.nio.channels.ClosedByInterruptException异常
+
+::
+
+    If this thread is blocked in an I/O operation upon an 
+    java.nio.channels.InterruptibleChannel then the channel will be closed, the thread's 
+    interrupt status will be set, and the thread will receive a 
+    java.nio.channels.ClosedByInterruptException.
+
+3. 如果线程阻塞在一个java.nio.channels.Selector上，收到中断后，中断状态被设置，线程立即从selector中返回，
+   返回的结果可能会有数据。
+
+::
+
+    If this thread is blocked in a java.nio.channels.Selector
+    then the thread's interrupt status will be set and it will return
+    immediately from the selection operation, possibly with a non-zero
+    value, just as if the selector's
+    java.nio.channels.Selector#wakeup method were invoked.
+
+4. 除了以上的情况之外的其他情况，如果收到了中断，只会设置线程的中断状态。至于当中断状态位被设置了后，
+   线程的后续行为将由线程自己来决定。如当线程阻塞在LockSupport.park的时候，如果此时中断该线程，
+   则设置中断状态位，将会从park中返回继续执行代码。
+
+::
+
+    If none of the previous conditions hold then this thread's interrupt
+    status will be set.
+
+可以看到，线程如果被中断并不代表一定会结束线程，大部分情况就是设置中断状态位，然后抛出一个异常之类的，把后续的操作留给
+线程自己根据情况来处理。
+
+.. graphviz::
+
+   digraph thread1 {
+       rankdir = "LR"
+       size="8,5"
+       O [shape = "circle"]
+       A [shape = "doublecircle" label="NEW"]
+       B [shape = "doublecircle" label="RUNNABLE"]
+       C [shape = "doublecircle" label="BLOCKED"]
+       D [shape = "doublecircle" label="WAITING"]
+       E [shape = "doublecircle" label="TIMED_WAITING"]
+       F [shape = "doublecircle" label="TERMINATED"]
+
+       O -> A [label="new Thread()"]
+       A -> B [label="start()"]
+
+       B -> C [label="enter/reenter synchronized(等待monitor lock)"]
+       C -> B [label="synchronized(成功获取了monitor lock)"]
+
+       B -> D [label="park wait join"]
+       D -> B [label="unpark notify notifyAll 线程结束 中断"]
+
+       B -> E [label="parkNanos parkUntil wait sleep join"]
+       E -> B [label="unpark notify notifyAll 线程结束 时间超时 中断"]
+
+       B -> F [label="线程结束"]
+
+   }
+
+
+JVM内部线程
+-----------------
+
+除了java线程之外，jvm中还有内部线程。
+
+::
+
+    VM thread: This singleton instance of VMThread is responsible for executing VM operations.
+
+    Periodic task thread: This singleton instance of WatcherThread simulates timer interrupts 
+    for executing periodic operations within the VM
+
+    GC threads: These threads, of different types, support parallel and concurrent garbage collection
+
+    Compiler threads: These threads perform runtime compilation of bytecode to native code
+
+    Signal dispatcher thread: This thread waits for process directed signals and dispatches 
+    them to a Java level signal handling method
+
+    All threads are instances of the Thread class, and all threads that execute Java code are 
+    JavaThread instances (a subclass of Thread). The VM keeps track of all threads in a linked-list 
+    known as the Threads_list, and which is protected by the Threads_lock – one of the key 
+    synchronization locks used within the VM.
+
+**参考文献**
+
+* `Hotspot线程模型 <http://openjdk.java.net/groups/hotspot/docs/RuntimeOverview.html#Thread%20Management|outline>`_
+* jdk11u源码

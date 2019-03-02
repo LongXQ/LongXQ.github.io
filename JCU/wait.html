@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>Java并发编程 &#8212; CC 0.1 文档</title>
+    <title>Object.wait原理 &#8212; CC 0.1 文档</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
@@ -18,8 +18,8 @@
     <script type="text/javascript" src="../_static/translations.js"></script>
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="next" title="Java对原子操作和内存屏障的封装" href="atomic.html" />
-    <link rel="prev" title="乱序和可见" href="../并发/ording.html" />
+    <link rel="next" title="阻塞、唤醒和中断总结" href="blockAndInterruptAndWake.html" />
+    <link rel="prev" title="synchronized原理" href="synchronized.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   
@@ -36,29 +36,8 @@
 
           <div class="body" role="main">
             
-  <div class="section" id="java">
-<h1>Java并发编程<a class="headerlink" href="#java" title="永久链接至标题">¶</a></h1>
-<div class="toctree-wrapper compound">
-</div>
-<p>openjdk的源码是用Mercurial版本工具管理的。我们以下载jdk11源码为例，介绍怎么下载。</p>
-<ol class="arabic simple">
-<li>安装Mercurial</li>
-</ol>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">pip</span> <span class="n">install</span> <span class="n">mercurial</span>
-</pre></div>
-</div>
-<ol class="arabic simple" start="2">
-<li>从仓库下载源码</li>
-</ol>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">hg</span> <span class="n">clone</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">hg</span><span class="o">.</span><span class="n">openjdk</span><span class="o">.</span><span class="n">java</span><span class="o">.</span><span class="n">net</span><span class="o">/</span><span class="n">jdk</span><span class="o">-</span><span class="n">updates</span><span class="o">/</span><span class="n">jdk11u</span><span class="o">/</span>
-</pre></div>
-</div>
-<ol class="arabic simple" start="3">
-<li>切换到稳定分支</li>
-</ol>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">hg</span> <span class="n">update</span> <span class="n">jdk</span><span class="o">-</span><span class="mf">11.0</span><span class="o">.</span><span class="mi">2</span><span class="o">-</span><span class="n">ga</span>
-</pre></div>
-</div>
+  <div class="section" id="object-wait">
+<h1>Object.wait原理<a class="headerlink" href="#object-wait" title="永久链接至标题">¶</a></h1>
 </div>
 
 
@@ -83,14 +62,14 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../link.html">网络资源</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../并发/index.html">并发编程：多核处理器的支持</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Java并发编程</a><ul>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Java并发编程</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="atomic.html">Java对原子操作和内存屏障的封装</a></li>
 <li class="toctree-l2"><a class="reference internal" href="thread.html">Java线程模型</a></li>
 <li class="toctree-l2"><a class="reference internal" href="park.html">LockSupport.park原理</a></li>
 <li class="toctree-l2"><a class="reference internal" href="sleep.html">Thread.sleep原理</a></li>
 <li class="toctree-l2"><a class="reference internal" href="interrupt.html">Thread.interrupt原理</a></li>
 <li class="toctree-l2"><a class="reference internal" href="synchronized.html">synchronized原理</a></li>
-<li class="toctree-l2"><a class="reference internal" href="wait.html">Object.wait原理</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Object.wait原理</a></li>
 <li class="toctree-l2"><a class="reference internal" href="blockAndInterruptAndWake.html">阻塞、唤醒和中断总结</a></li>
 </ul>
 </li>
@@ -123,7 +102,7 @@
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |
-      <a href="../_sources/JCU/index.rst.txt"
+      <a href="../_sources/JCU/wait.rst.txt"
           rel="nofollow">Page source</a>
     </div>
 

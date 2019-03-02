@@ -1,0 +1,502 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Java线程模型 &#8212; CC 0.1 文档</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <script type="text/javascript" src="../_static/translations.js"></script>
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="next" title="LockSupport.park原理" href="park.html" />
+    <link rel="prev" title="Java对原子操作和内存屏障的封装" href="atomic.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="java">
+<h1>Java线程模型<a class="headerlink" href="#java" title="永久链接至标题">¶</a></h1>
+<div class="admonition note">
+<p class="first admonition-title">注解</p>
+<p class="last">jdk11，jvm为hotspot，硬件和系统平台为x86/linux</p>
+</div>
+<p><a class="reference external" href="http://openjdk.java.net/groups/hotspot/docs/RuntimeOverview.html#Thread%20Management|outline">Hotspot线程模型</a>
+中大致描述了Hotspot中线程的模型。</p>
+<div class="section" id="id1">
+<h2>线程状态<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h2>
+<p>JVM中java线程状态：</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">enum</span> <span class="n">ThreadStatus</span> <span class="p">{</span>
+    <span class="n">NEW</span>                      <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">RUNNABLE</span>                 <span class="o">=</span> <span class="n">JVMTI_THREAD_STATE_ALIVE</span> <span class="o">+</span>          <span class="c1">// runnable / running</span>
+                               <span class="n">JVMTI_THREAD_STATE_RUNNABLE</span><span class="p">,</span>
+    <span class="n">SLEEPING</span>                 <span class="o">=</span> <span class="n">JVMTI_THREAD_STATE_ALIVE</span> <span class="o">+</span>          <span class="c1">// Thread.sleep()</span>
+                               <span class="n">JVMTI_THREAD_STATE_WAITING</span> <span class="o">+</span>
+                               <span class="n">JVMTI_THREAD_STATE_WAITING_WITH_TIMEOUT</span> <span class="o">+</span>
+                               <span class="n">JVMTI_THREAD_STATE_SLEEPING</span><span class="p">,</span>
+    <span class="n">IN_OBJECT_WAIT</span>           <span class="o">=</span> <span class="n">JVMTI_THREAD_STATE_ALIVE</span> <span class="o">+</span>          <span class="c1">// Object.wait()</span>
+                               <span class="n">JVMTI_THREAD_STATE_WAITING</span> <span class="o">+</span>
+                               <span class="n">JVMTI_THREAD_STATE_WAITING_INDEFINITELY</span> <span class="o">+</span>
+                               <span class="n">JVMTI_THREAD_STATE_IN_OBJECT_WAIT</span><span class="p">,</span>
+    <span class="n">IN_OBJECT_WAIT_TIMED</span>     <span class="o">=</span> <span class="n">JVMTI_THREAD_STATE_ALIVE</span> <span class="o">+</span>          <span class="c1">// Object.wait(long)</span>
+                               <span class="n">JVMTI_THREAD_STATE_WAITING</span> <span class="o">+</span>
+                               <span class="n">JVMTI_THREAD_STATE_WAITING_WITH_TIMEOUT</span> <span class="o">+</span>
+                               <span class="n">JVMTI_THREAD_STATE_IN_OBJECT_WAIT</span><span class="p">,</span>
+    <span class="n">PARKED</span>                   <span class="o">=</span> <span class="n">JVMTI_THREAD_STATE_ALIVE</span> <span class="o">+</span>          <span class="c1">// LockSupport.park()</span>
+                               <span class="n">JVMTI_THREAD_STATE_WAITING</span> <span class="o">+</span>
+                               <span class="n">JVMTI_THREAD_STATE_WAITING_INDEFINITELY</span> <span class="o">+</span>
+                               <span class="n">JVMTI_THREAD_STATE_PARKED</span><span class="p">,</span>
+    <span class="n">PARKED_TIMED</span>             <span class="o">=</span> <span class="n">JVMTI_THREAD_STATE_ALIVE</span> <span class="o">+</span>          <span class="c1">// LockSupport.park(long)</span>
+                               <span class="n">JVMTI_THREAD_STATE_WAITING</span> <span class="o">+</span>
+                               <span class="n">JVMTI_THREAD_STATE_WAITING_WITH_TIMEOUT</span> <span class="o">+</span>
+                               <span class="n">JVMTI_THREAD_STATE_PARKED</span><span class="p">,</span>
+    <span class="n">BLOCKED_ON_MONITOR_ENTER</span> <span class="o">=</span> <span class="n">JVMTI_THREAD_STATE_ALIVE</span> <span class="o">+</span>          <span class="c1">// (re-)entering a synchronization block</span>
+                               <span class="n">JVMTI_THREAD_STATE_BLOCKED_ON_MONITOR_ENTER</span><span class="p">,</span>
+    <span class="n">TERMINATED</span>               <span class="o">=</span> <span class="n">JVMTI_THREAD_STATE_TERMINATED</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>java代码中线程状态：</p>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="kd">public</span> <span class="kd">enum</span> <span class="n">State</span> <span class="o">{</span>
+    <span class="n">NEW</span><span class="o">,</span>
+    <span class="n">RUNNABLE</span><span class="o">,</span>
+    <span class="n">BLOCKED</span><span class="o">,</span>
+    <span class="n">WAITING</span><span class="o">,</span>
+    <span class="n">TIMED_WAITING</span><span class="o">,</span>
+    <span class="n">TERMINATED</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+<p>线程状态保存在Thread对象的threadStatus属性中。</p>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="cm">/*</span>
+<span class="cm"> * Java thread status for tools, default indicates thread &#39;not yet started&#39;</span>
+<span class="cm"> */</span>
+<span class="kd">private</span> <span class="kd">volatile</span> <span class="kt">int</span> <span class="n">threadStatus</span><span class="o">;</span>
+</pre></div>
+</div>
+<p>可以看到java代码中和jvm中线程状态不一样，它们之间的转换由Thread::getState函数实现</p>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="c1">// Thread.java</span>
+<span class="kd">public</span> <span class="n">State</span> <span class="nf">getState</span><span class="o">()</span> <span class="o">{</span>
+    <span class="c1">// get current thread state</span>
+    <span class="k">return</span> <span class="n">jdk</span><span class="o">.</span><span class="na">internal</span><span class="o">.</span><span class="na">misc</span><span class="o">.</span><span class="na">VM</span><span class="o">.</span><span class="na">toThreadState</span><span class="o">(</span><span class="n">threadStatus</span><span class="o">);</span>
+<span class="o">}</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Returns Thread.State for the given threadStatus</span>
+<span class="cm"> */</span>
+<span class="kd">public</span> <span class="kd">static</span> <span class="n">Thread</span><span class="o">.</span><span class="na">State</span> <span class="nf">toThreadState</span><span class="o">(</span><span class="kt">int</span> <span class="n">threadStatus</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">((</span><span class="n">threadStatus</span> <span class="o">&amp;</span> <span class="n">JVMTI_THREAD_STATE_RUNNABLE</span><span class="o">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">RUNNABLE</span><span class="o">;</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="k">if</span> <span class="o">((</span><span class="n">threadStatus</span> <span class="o">&amp;</span> <span class="n">JVMTI_THREAD_STATE_BLOCKED_ON_MONITOR_ENTER</span><span class="o">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">BLOCKED</span><span class="o">;</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="k">if</span> <span class="o">((</span><span class="n">threadStatus</span> <span class="o">&amp;</span> <span class="n">JVMTI_THREAD_STATE_WAITING_INDEFINITELY</span><span class="o">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">WAITING</span><span class="o">;</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="k">if</span> <span class="o">((</span><span class="n">threadStatus</span> <span class="o">&amp;</span> <span class="n">JVMTI_THREAD_STATE_WAITING_WITH_TIMEOUT</span><span class="o">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">TIMED_WAITING</span><span class="o">;</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="k">if</span> <span class="o">((</span><span class="n">threadStatus</span> <span class="o">&amp;</span> <span class="n">JVMTI_THREAD_STATE_TERMINATED</span><span class="o">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">TERMINATED</span><span class="o">;</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="k">if</span> <span class="o">((</span><span class="n">threadStatus</span> <span class="o">&amp;</span> <span class="n">JVMTI_THREAD_STATE_ALIVE</span><span class="o">)</span> <span class="o">==</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">NEW</span><span class="o">;</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">RUNNABLE</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li>如果jvm中线程状态分量中有JVMTI_THREAD_STATE_RUNNABLE，在java代码看到状态就是RUNNABLE。</li>
+<li>如果jvm中线程状态分量中有JVMTI_THREAD_STATE_BLOCKED_ON_MONITOR_ENTER，在java代码看到状态就是BLOCKED。</li>
+</ol>
+<p>。。。</p>
+</div>
+<div class="section" id="id2">
+<h2>线程模型<a class="headerlink" href="#id2" title="永久链接至标题">¶</a></h2>
+<p><a class="reference external" href="http://openjdk.java.net/groups/hotspot/docs/RuntimeOverview.html#Thread%20Management|outline">hotspot中线程模型的介绍</a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>The basic threading model in Hotspot is a 1:1 mapping between Java threads
+(an instance of java.lang.Thread) and native operating system threads. The
+native thread is created when the Java thread is started, and is reclaimed once
+it terminates. The operating system is responsible for scheduling all threads
+and dispatching to any available CPU.
+
+1. The java.lang.Thread instance that represents a thread in Java code
+
+2. A JavaThread instance that represents the java.lang.Thread instance inside the VM.
+   It contains additional information to track the state of the thread. A JavaThread
+   holds a reference to its associated java.lang.Thread object (as an oop), and the
+   java.lang.Thread object also stores a reference to its JavaThread (as a raw int).
+   A JavaThread also holds a reference to its associated OSThread instance.
+
+3. An OSThread instance represents an operating system thread, and contains additional
+   operating-system-level information needed to track thread state. The OSThread then
+   contains a platform specific “handle” to identify the actual thread to the operating
+   system
+
+When a java.lang.Thread is started the VM creates the associated JavaThread and OSThread
+objects, and ultimately the native thread. After preparing all of the VM state (such as
+thread-local storage and allocation buffers, synchronization objects and so forth) the
+native thread is started. The native thread completes initialization and then executes a
+start-up method that leads to the execution of the java.lang.Thread object&#39;s run() method,
+and then, upon its return, terminates the thread after dealing with any uncaught exceptions,
+and interacting with the VM to check if termination of this thread requires termination of
+the whole VM. Thread termination releases all allocated resources, removes the JavaThread from
+the set of known threads, invokes destructors for the OSThread and JavaThread and ultimately
+ceases execution when it&#39;s initial startup method completes.
+</pre></div>
+</div>
+<p>和线程相关的主要有三个对象：java.lang.Thread实例（在jvm中就是一个oop对象），JavaThread对象和OSThread对象。</p>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="c1">// src/hotspot/share/runtime/thread.hpp</span>
+<span class="kd">class</span> <span class="nc">Thread</span><span class="o">:</span> <span class="kd">public</span> <span class="n">ThreadShadow</span> <span class="o">{</span>
+    <span class="o">...</span>
+    <span class="kd">protected</span><span class="o">:</span>
+        <span class="c1">// OS data associated with the thread</span>
+        <span class="n">OSThread</span><span class="o">*</span> <span class="n">_osthread</span><span class="o">;</span>  <span class="c1">// Platform-specific thread information</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+
+<span class="c1">// src/hotspot/share/runtime/thread.hpp</span>
+<span class="kd">class</span> <span class="nc">JavaThread</span><span class="o">:</span> <span class="kd">public</span> <span class="n">Thread</span> <span class="o">{</span>
+    <span class="o">...</span>
+    <span class="kd">private</span><span class="o">:</span>
+        <span class="n">JavaThread</span><span class="o">*</span>    <span class="n">_next</span><span class="o">;</span>                          <span class="c1">// The next thread in the Threads list</span>
+        <span class="n">bool</span>           <span class="n">_on_thread_list</span><span class="o">;</span>                <span class="c1">// Is set when this JavaThread is added to the Threads list</span>
+        <span class="n">oop</span>            <span class="n">_threadObj</span><span class="o">;</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+
+<span class="c1">// src/hotspot/share/runtime/osThread.hpp</span>
+<span class="kd">class</span> <span class="nc">OSThread</span><span class="o">:</span> <span class="kd">public</span> <span class="n">CHeapObj</span><span class="o">&lt;</span><span class="n">mtThread</span><span class="o">&gt;</span> <span class="o">{</span>
+    <span class="o">...</span>
+    <span class="kd">private</span><span class="o">:</span>
+        <span class="c1">// _thread_id is kernel thread id (similar to LWP id on Solaris). Each</span>
+        <span class="c1">// thread has a unique thread_id (BsdThreads or NPTL). It can be used</span>
+        <span class="c1">// to access /proc.</span>
+        <span class="n">thread_id_t</span> <span class="n">_thread_id</span><span class="o">;</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+<div class="graphviz"><object data="../_images/graphviz-299201a4aeb3ec75c7491ac1efc720462bdffdce.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph thread {
+    rankdir = &quot;LR&quot;
+    A [shape = &quot;record&quot; label=&quot; ...| &lt;f1&gt; eetop|...| tid |...&quot; xlabel=&quot;oop(java.lang.Thread)&quot;]
+    B [shape = &quot;record&quot; label=&quot; ...| &lt;f1&gt; _osthread | ... | &lt;f2&gt; _threadObj|...&quot; xlabel=&quot;JavaThread&quot;]
+    C [shape = &quot;record&quot; label=&quot; ...| _thread_id| ... &quot; xlabel=&quot;OSThread&quot;]
+    A:f1 -&gt; B
+    B:f1 -&gt; C
+    B:f2 -&gt; A
+}</p></object></div>
+</div>
+<div class="section" id="blocked">
+<h2>BLOCKED状态<a class="headerlink" href="#blocked" title="永久链接至标题">¶</a></h2>
+<p>线程进入synchronized block/method，或者在调用Object.wait后重入synchronized block/method使等待对象的
+monitor lock时候会使线程处于BLOCKED状态，暂停执行后续的代码。</p>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="n">Object</span> <span class="n">o</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Object</span><span class="o">();</span>
+<span class="kd">synchronized</span> <span class="o">(</span><span class="n">o</span><span class="o">){</span>
+    <span class="o">...</span>
+    <span class="n">o</span><span class="o">.</span><span class="na">wait</span><span class="o">();</span>
+    <span class="kd">synchronized</span> <span class="o">(</span><span class="n">o</span><span class="o">){</span>
+        <span class="o">...</span>
+    <span class="o">}</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="waiting">
+<h2>WAITING状态<a class="headerlink" href="#waiting" title="永久链接至标题">¶</a></h2>
+<div class="admonition note">
+<p class="first admonition-title">注解</p>
+<p>A thread in the waiting state is waiting for another thread to
+perform a particular action.</p>
+<p class="last">For example, a thread that has called Object.wait()
+on an object is waiting for another thread to call
+Object.notify() or Object.notifyAll() on that object.
+A thread that has called Thread.join() is waiting for a specified thread to terminate.</p>
+</div>
+<p>三种情况下会使线程出于waiting状态，暂停执行后续的代码：</p>
+<ol class="arabic simple">
+<li>LockSupport.park</li>
+</ol>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="n">Thread</span> <span class="n">thread1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+    <span class="n">LockSupport</span><span class="o">.</span><span class="na">park</span><span class="o">();</span>
+<span class="o">});</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li>Thread.join</li>
+</ol>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="n">Thread</span> <span class="n">thread1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+    <span class="o">...</span>
+<span class="o">});</span>
+
+<span class="n">thread1</span><span class="o">.</span><span class="na">join</span><span class="o">();</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li>Object.wait with no timeout</li>
+</ol>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="n">Object</span> <span class="n">o</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Object</span><span class="o">();</span>
+<span class="kd">synchronized</span> <span class="o">(</span><span class="n">o</span><span class="o">){</span>
+    <span class="o">...</span>
+    <span class="n">o</span><span class="o">.</span><span class="na">wait</span><span class="o">();</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="timed-waiting">
+<h2>TIMED_WAITING状态<a class="headerlink" href="#timed-waiting" title="永久链接至标题">¶</a></h2>
+<p>TIMED_WAITING和WAITING差不多，唯一区别就是多了一个时间限制，在时间满足后，继续执行后续代码。</p>
+<ol class="arabic simple">
+<li>Thread.sleep</li>
+</ol>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="n">Thread</span> <span class="n">thread1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+    <span class="n">Thread</span><span class="o">.</span><span class="na">sleep</span><span class="o">(</span><span class="mi">100</span><span class="o">);</span>
+<span class="o">});</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li>Object.wait(long)</li>
+</ol>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="n">Object</span> <span class="n">o</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Object</span><span class="o">();</span>
+<span class="kd">synchronized</span> <span class="o">(</span><span class="n">o</span><span class="o">){</span>
+    <span class="o">...</span>
+    <span class="n">o</span><span class="o">.</span><span class="na">wait</span><span class="o">(</span><span class="mi">100</span><span class="o">);</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li>Thread.join(long)</li>
+</ol>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="n">Thread</span> <span class="n">thread1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+    <span class="o">...</span>
+<span class="o">});</span>
+
+<span class="n">thread1</span><span class="o">.</span><span class="na">join</span><span class="o">(</span><span class="mi">100</span><span class="o">);</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="4">
+<li>LockSupport.parkNanos或LockSupport.parkUntil</li>
+</ol>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="n">Thread</span> <span class="n">thread1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+    <span class="o">...</span>
+    <span class="n">LockSupport</span><span class="o">.</span><span class="na">parkNanos</span><span class="o">(</span><span class="mi">100</span><span class="o">);</span>
+    <span class="o">...</span>
+<span class="o">});</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id4">
+<h2>中断和中断异常<a class="headerlink" href="#id4" title="永久链接至标题">¶</a></h2>
+<p>中断一个线程：</p>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="n">Thread</span> <span class="n">thread1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+    <span class="o">...</span>
+<span class="o">});</span>
+
+<span class="n">thread1</span><span class="o">.</span><span class="na">interrupt</span><span class="o">();</span>
+</pre></div>
+</div>
+<p>如果此时java线程处于不同的状态，对待中断也不一样。</p>
+<ol class="arabic simple">
+<li>线程处于阻塞状态：由于调用了Object.wait, Thread.sleep, Thread.join而处于阻塞状态。收到中断后，会清除中断
+状态。然后抛出一个InterruptedException异常。</li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">If</span> <span class="n">this</span> <span class="n">thread</span> <span class="ow">is</span> <span class="n">blocked</span> <span class="ow">in</span> <span class="n">an</span> <span class="n">invocation</span> <span class="n">of</span> <span class="n">the</span> <span class="n">Object</span><span class="c1">#wait(), Object#wait(long)</span>
+<span class="n">wait</span><span class="p">(</span><span class="n">long</span><span class="p">),</span> <span class="ow">or</span> <span class="n">Object</span><span class="c1">#wait(long, int) methods of the Object class, or of the</span>
+<span class="c1">#join(), #join(long), #join(long, int), #sleep(long), or #sleep(long, int),</span>
+<span class="n">methods</span> <span class="n">of</span> <span class="n">Thread</span> <span class="n">class</span><span class="p">,</span> <span class="n">then</span> <span class="n">its</span> <span class="n">interrupt</span> <span class="n">status</span> <span class="n">will</span> <span class="n">be</span> <span class="n">cleared</span> <span class="ow">and</span> <span class="n">it</span>
+<span class="n">will</span> <span class="n">receive</span> <span class="n">an</span> <span class="n">InterruptedException</span><span class="o">.</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li>如果线程阻塞在一个java.nio.channels.InterruptibleChannel上，
+当收到中断的时候，Channel会被关闭，中断状态会被设置，线程将收到
+java.nio.channels.ClosedByInterruptException异常</li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">If</span> <span class="n">this</span> <span class="n">thread</span> <span class="ow">is</span> <span class="n">blocked</span> <span class="ow">in</span> <span class="n">an</span> <span class="n">I</span><span class="o">/</span><span class="n">O</span> <span class="n">operation</span> <span class="n">upon</span> <span class="n">an</span>
+<span class="n">java</span><span class="o">.</span><span class="n">nio</span><span class="o">.</span><span class="n">channels</span><span class="o">.</span><span class="n">InterruptibleChannel</span> <span class="n">then</span> <span class="n">the</span> <span class="n">channel</span> <span class="n">will</span> <span class="n">be</span> <span class="n">closed</span><span class="p">,</span> <span class="n">the</span> <span class="n">thread</span><span class="s1">&#39;s</span>
+<span class="n">interrupt</span> <span class="n">status</span> <span class="n">will</span> <span class="n">be</span> <span class="nb">set</span><span class="p">,</span> <span class="ow">and</span> <span class="n">the</span> <span class="n">thread</span> <span class="n">will</span> <span class="n">receive</span> <span class="n">a</span>
+<span class="n">java</span><span class="o">.</span><span class="n">nio</span><span class="o">.</span><span class="n">channels</span><span class="o">.</span><span class="n">ClosedByInterruptException</span><span class="o">.</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li>如果线程阻塞在一个java.nio.channels.Selector上，收到中断后，中断状态被设置，线程立即从selector中返回，
+返回的结果可能会有数据。</li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">If</span> <span class="n">this</span> <span class="n">thread</span> <span class="ow">is</span> <span class="n">blocked</span> <span class="ow">in</span> <span class="n">a</span> <span class="n">java</span><span class="o">.</span><span class="n">nio</span><span class="o">.</span><span class="n">channels</span><span class="o">.</span><span class="n">Selector</span>
+<span class="n">then</span> <span class="n">the</span> <span class="n">thread</span><span class="s1">&#39;s interrupt status will be set and it will return</span>
+<span class="n">immediately</span> <span class="kn">from</span> <span class="nn">the</span> <span class="n">selection</span> <span class="n">operation</span><span class="p">,</span> <span class="n">possibly</span> <span class="k">with</span> <span class="n">a</span> <span class="n">non</span><span class="o">-</span><span class="n">zero</span>
+<span class="n">value</span><span class="p">,</span> <span class="n">just</span> <span class="k">as</span> <span class="k">if</span> <span class="n">the</span> <span class="n">selector</span><span class="s1">&#39;s</span>
+<span class="n">java</span><span class="o">.</span><span class="n">nio</span><span class="o">.</span><span class="n">channels</span><span class="o">.</span><span class="n">Selector</span><span class="c1">#wakeup method were invoked.</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="4">
+<li>除了以上的情况之外的其他情况，如果收到了中断，只会设置线程的中断状态。至于当中断状态位被设置了后，
+线程的后续行为将由线程自己来决定。如当线程阻塞在LockSupport.park的时候，如果此时中断该线程，
+则设置中断状态位，将会从park中返回继续执行代码。</li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">If</span> <span class="n">none</span> <span class="n">of</span> <span class="n">the</span> <span class="n">previous</span> <span class="n">conditions</span> <span class="n">hold</span> <span class="n">then</span> <span class="n">this</span> <span class="n">thread</span><span class="s1">&#39;s interrupt</span>
+<span class="n">status</span> <span class="n">will</span> <span class="n">be</span> <span class="nb">set</span><span class="o">.</span>
+</pre></div>
+</div>
+<p>可以看到，线程如果被中断并不代表一定会结束线程，大部分情况就是设置中断状态位，然后抛出一个异常之类的，把后续的操作留给
+线程自己根据情况来处理。</p>
+<div class="graphviz"><object data="../_images/graphviz-c795dd0188e6c7c7fef2016a870736e7e51df416.svg" type="image/svg+xml" class="graphviz">
+<p class="warning">digraph thread1 {
+    rankdir = &quot;LR&quot;
+    size=&quot;8,5&quot;
+    O [shape = &quot;circle&quot;]
+    A [shape = &quot;doublecircle&quot; label=&quot;NEW&quot;]
+    B [shape = &quot;doublecircle&quot; label=&quot;RUNNABLE&quot;]
+    C [shape = &quot;doublecircle&quot; label=&quot;BLOCKED&quot;]
+    D [shape = &quot;doublecircle&quot; label=&quot;WAITING&quot;]
+    E [shape = &quot;doublecircle&quot; label=&quot;TIMED_WAITING&quot;]
+    F [shape = &quot;doublecircle&quot; label=&quot;TERMINATED&quot;]
+
+    O -&gt; A [label=&quot;new Thread()&quot;]
+    A -&gt; B [label=&quot;start()&quot;]
+
+    B -&gt; C [label=&quot;enter/reenter synchronized(等待monitor lock)&quot;]
+    C -&gt; B [label=&quot;synchronized(成功获取了monitor lock)&quot;]
+
+    B -&gt; D [label=&quot;park wait join&quot;]
+    D -&gt; B [label=&quot;unpark notify notifyAll 线程结束 中断&quot;]
+
+    B -&gt; E [label=&quot;parkNanos parkUntil wait sleep join&quot;]
+    E -&gt; B [label=&quot;unpark notify notifyAll 线程结束 时间超时 中断&quot;]
+
+    B -&gt; F [label=&quot;线程结束&quot;]
+
+}</p></object></div>
+</div>
+<div class="section" id="jvm">
+<h2>JVM内部线程<a class="headerlink" href="#jvm" title="永久链接至标题">¶</a></h2>
+<p>除了java线程之外，jvm中还有内部线程。</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>VM thread: This singleton instance of VMThread is responsible for executing VM operations.
+
+Periodic task thread: This singleton instance of WatcherThread simulates timer interrupts
+for executing periodic operations within the VM
+
+GC threads: These threads, of different types, support parallel and concurrent garbage collection
+
+Compiler threads: These threads perform runtime compilation of bytecode to native code
+
+Signal dispatcher thread: This thread waits for process directed signals and dispatches
+them to a Java level signal handling method
+
+All threads are instances of the Thread class, and all threads that execute Java code are
+JavaThread instances (a subclass of Thread). The VM keeps track of all threads in a linked-list
+known as the Threads_list, and which is protected by the Threads_lock – one of the key
+synchronization locks used within the VM.
+</pre></div>
+</div>
+<p><strong>参考文献</strong></p>
+<ul class="simple">
+<li><a class="reference external" href="http://openjdk.java.net/groups/hotspot/docs/RuntimeOverview.html#Thread%20Management|outline">Hotspot线程模型</a></li>
+<li>jdk11u源码</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">CC</a></h1>
+
+
+
+<p class="blurb">日常总结分享</p>
+
+
+
+
+
+
+<h3>导航</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../link.html">网络资源</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../并发/index.html">并发编程：多核处理器的支持</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Java并发编程</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="atomic.html">Java对原子操作和内存屏障的封装</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Java线程模型</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id1">线程状态</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id2">线程模型</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#blocked">BLOCKED状态</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#waiting">WAITING状态</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#timed-waiting">TIMED_WAITING状态</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id4">中断和中断异常</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#jvm">JVM内部线程</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="park.html">LockSupport.park原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sleep.html">Thread.sleep原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interrupt.html">Thread.interrupt原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="synchronized.html">synchronized原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wait.html">Object.wait原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="blockAndInterruptAndWake.html">阻塞、唤醒和中断总结</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../rst.html">rst示例</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../graphviz.html">graphviz</a></li>
+</ul>
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3>快速搜索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="转向" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, longxiongqiu.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/JCU/thread.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

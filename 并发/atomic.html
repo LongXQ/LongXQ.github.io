@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>多核处理器的支持：原子性 &#8212; CC 0.1 文档</title>
+    <title>原子指令 &#8212; CC 0.1 文档</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
@@ -18,8 +18,8 @@
     <script type="text/javascript" src="../_static/translations.js"></script>
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="next" title="多核处理器的支持：内存顺序" href="ording.html" />
-    <link rel="prev" title="并发：多核处理器的支持" href="index.html" />
+    <link rel="next" title="乱序和可见" href="ording.html" />
+    <link rel="prev" title="并发编程：多核处理器的支持" href="index.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   
@@ -37,7 +37,7 @@
           <div class="body" role="main">
             
   <div class="section" id="id1">
-<h1>多核处理器的支持：原子性<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h1>
+<h1>原子指令<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h1>
 <div class="admonition note">
 <p class="first admonition-title">注解</p>
 <p class="last">我们以X86/64体系结构作为讨论对象。</p>
@@ -237,8 +237,8 @@
 <h3>导航</h3>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../link.html">网络资源</a></li>
-<li class="toctree-l1 current"><a class="reference internal" href="index.html">并发：多核处理器的支持</a><ul class="current">
-<li class="toctree-l2 current"><a class="current reference internal" href="#">多核处理器的支持：原子性</a><ul>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">并发编程：多核处理器的支持</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">原子指令</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#guarateed-atomic-operation">Guarateed atomic operation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#bus-locking">Bus locking</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#automatic-locking">Automatic Locking</a></li>
@@ -249,7 +249,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#id2">举例</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="ording.html">多核处理器的支持：乱序和可见</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ording.html">乱序和可见</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../rst.html">rst示例</a></li>

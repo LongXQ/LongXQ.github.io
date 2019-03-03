@@ -45,14 +45,14 @@
     <span class="kt">bool</span> <span class="n">is_alive</span> <span class="o">=</span> <span class="n">tlh</span><span class="p">.</span><span class="n">cv_internal_thread_to_JavaThread</span><span class="p">(</span><span class="n">jthread</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">receiver</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">is_alive</span><span class="p">)</span> <span class="p">{</span>
         <span class="c1">// jthread refers to a live JavaThread.</span>
-        <span class="n">Thread</span><span class="o">::</span><span class="n">interrupt</span><span class="p">(</span><span class="n">receiver</span><span class="p">);</span>
-    <span class="p">}</span>
-<span class="hll"><span class="n">JVM_END</span>
-</span>
+<span class="hll">        <span class="n">Thread</span><span class="o">::</span><span class="n">interrupt</span><span class="p">(</span><span class="n">receiver</span><span class="p">);</span>
+</span>    <span class="p">}</span>
+<span class="n">JVM_END</span>
+
 <span class="c1">// thread.cpp</span>
 <span class="kt">void</span> <span class="n">Thread</span><span class="o">::</span><span class="n">interrupt</span><span class="p">(</span><span class="n">Thread</span><span class="o">*</span> <span class="kr">thread</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">os</span><span class="o">::</span><span class="n">interrupt</span><span class="p">(</span><span class="kr">thread</span><span class="p">);</span>
-<span class="p">}</span>
+<span class="hll">    <span class="n">os</span><span class="o">::</span><span class="n">interrupt</span><span class="p">(</span><span class="kr">thread</span><span class="p">);</span>
+</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>Thread.interrupt调用了JavaThread中的interrupt方法,最终调用了os::interrupt.</p>
@@ -65,18 +65,18 @@
 <span class="hll">        <span class="n">osthread</span><span class="o">-&gt;</span><span class="n">set_interrupted</span><span class="p">(</span><span class="nb">true</span><span class="p">);</span>
 </span>        <span class="n">OrderAccess</span><span class="o">::</span><span class="n">fence</span><span class="p">();</span>
         <span class="n">ParkEvent</span> <span class="o">*</span> <span class="k">const</span> <span class="n">slp</span> <span class="o">=</span> <span class="kr">thread</span><span class="o">-&gt;</span><span class="n">_SleepEvent</span> <span class="p">;</span>
-<span class="hll">        <span class="c1">// 唤醒由于调用了Thread.sleep而阻塞在ParkEvent上的线程</span>
-</span>        <span class="k">if</span> <span class="p">(</span><span class="n">slp</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="n">slp</span><span class="o">-&gt;</span><span class="n">unpark</span><span class="p">()</span> <span class="p">;</span>
-    <span class="p">}</span>
+        <span class="c1">// 唤醒由于调用了Thread.sleep而阻塞在ParkEvent上的线程</span>
+<span class="hll">        <span class="k">if</span> <span class="p">(</span><span class="n">slp</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="n">slp</span><span class="o">-&gt;</span><span class="n">unpark</span><span class="p">()</span> <span class="p">;</span>
+</span>    <span class="p">}</span>
 
-<span class="hll">    <span class="c1">// 唤醒由于调用了LockSupport.park而阻塞在Parker上的线程</span>
-</span>    <span class="k">if</span> <span class="p">(</span><span class="kr">thread</span><span class="o">-&gt;</span><span class="n">is_Java_thread</span><span class="p">())</span>
-        <span class="p">((</span><span class="n">JavaThread</span><span class="o">*</span><span class="p">)</span><span class="kr">thread</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">parker</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">unpark</span><span class="p">();</span>
-<span class="hll">
-</span>    <span class="c1">// 唤醒由于使用了synchronized而阻塞在ParkEvent上的线程</span>
+    <span class="c1">// 唤醒由于调用了LockSupport.park而阻塞在Parker上的线程</span>
+    <span class="k">if</span> <span class="p">(</span><span class="kr">thread</span><span class="o">-&gt;</span><span class="n">is_Java_thread</span><span class="p">())</span>
+<span class="hll">        <span class="p">((</span><span class="n">JavaThread</span><span class="o">*</span><span class="p">)</span><span class="kr">thread</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">parker</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">unpark</span><span class="p">();</span>
+</span>
+    <span class="c1">// 唤醒由于使用了synchronized而阻塞在ParkEvent上的线程</span>
     <span class="n">ParkEvent</span> <span class="o">*</span> <span class="n">ev</span> <span class="o">=</span> <span class="kr">thread</span><span class="o">-&gt;</span><span class="n">_ParkEvent</span> <span class="p">;</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">ev</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="n">ev</span><span class="o">-&gt;</span><span class="n">unpark</span><span class="p">()</span> <span class="p">;</span>
-<span class="p">}</span>
+<span class="hll">    <span class="k">if</span> <span class="p">(</span><span class="n">ev</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="n">ev</span><span class="o">-&gt;</span><span class="n">unpark</span><span class="p">()</span> <span class="p">;</span>
+</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>可以看到interrupt首先设置了线程的中断状态，
@@ -104,11 +104,12 @@
 </span><span class="o">}</span>
 </pre></div>
 </div>
-<p>上面是java中Thread.interrupt源码，其中interrupt0就是前面讨论的JVM_Interrupt，在JVM中的中断实现。</p>
-<p>而b.interrupt(this)是给I/O中断使用的，目的是把一些阻塞I/O操作集成到java的中断框架中，使中断也能够中断这些
+<p>上面是java中Thread.interrupt源码，其中interrupt0是JNI方法,就是前面讨论的JVM_Interrupt，在JVM中的中断实现。</p>
+<p>而b.interrupt(this)是给I/O中断使用的，目的是把一些I/O操作集成到java的中断框架中，使中断也能够中断这些
 I/O。</p>
 <p>I/O操作如果为了能够被中断，那么先给自己注册一个Interruptible对象:</p>
-<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="kd">static</span> <span class="kt">void</span> <span class="nf">blockedOn</span><span class="o">(</span><span class="n">Interruptible</span> <span class="n">b</span><span class="o">)</span> <span class="o">{</span>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="c1">//java.lang.Thread.java</span>
+<span class="kd">static</span> <span class="kt">void</span> <span class="nf">blockedOn</span><span class="o">(</span><span class="n">Interruptible</span> <span class="n">b</span><span class="o">)</span> <span class="o">{</span>
     <span class="n">Thread</span> <span class="n">me</span> <span class="o">=</span> <span class="n">Thread</span><span class="o">.</span><span class="na">currentThread</span><span class="o">();</span>
     <span class="kd">synchronized</span> <span class="o">(</span><span class="n">me</span><span class="o">.</span><span class="na">blockerLock</span><span class="o">)</span> <span class="o">{</span>
         <span class="n">me</span><span class="o">.</span><span class="na">blocker</span> <span class="o">=</span> <span class="n">b</span><span class="o">;</span>
@@ -116,7 +117,7 @@ I/O。</p>
 <span class="o">}</span>
 </pre></div>
 </div>
-<p>然后在调用Thread.interrupt时候就会调用这个Interruptible对象的interrupt方法来完成对自己的中断。</p>
+<p>然后在调用Thread.interrupt来中断线程的时候就会调用这个Interruptible对象的interrupt方法来完成对I/O的中断。</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="o">.</span><span class="n">interrupt</span><span class="p">(</span><span class="n">this</span><span class="p">);</span>
 </pre></div>
 </div>
@@ -149,6 +150,8 @@ I/O操作了。具体例子可参考NIO的一些实现。</p>
 <li class="toctree-l1"><a class="reference internal" href="../并发/index.html">并发编程：多核处理器的支持</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="index.html">Java并发编程</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="atomic.html">Java对原子操作和内存屏障的封装</a></li>
+<li class="toctree-l2"><a class="reference internal" href="object.html">Java对象模型</a></li>
+<li class="toctree-l2"><a class="reference internal" href="object.html#id1">java类</a></li>
 <li class="toctree-l2"><a class="reference internal" href="thread.html">Java线程模型</a></li>
 <li class="toctree-l2"><a class="reference internal" href="park.html">LockSupport.park原理</a></li>
 <li class="toctree-l2"><a class="reference internal" href="sleep.html">Thread.sleep原理</a></li>

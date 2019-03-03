@@ -2,7 +2,7 @@ Thread.interrupt原理
 =========================
 
 .. code-block:: c++
-    :emphasize-lines: 10
+    :emphasize-lines: 8,14
 
     // jvm.cpp
     JVM_ENTRY(void, JVM_Interrupt(JNIEnv* env, jobject jthread))
@@ -23,7 +23,7 @@ Thread.interrupt原理
 Thread.interrupt调用了JavaThread中的interrupt方法,最终调用了os::interrupt.
 
 .. code-block:: c++
-    :emphasize-lines: 7,10,14,17
+    :emphasize-lines: 7,11,16,20
 
     void os::interrupt(Thread* thread) {
 
@@ -76,22 +76,23 @@ I/O中断
         interrupt0();
     }
 
-上面是java中Thread.interrupt源码，其中interrupt0就是前面讨论的JVM_Interrupt，在JVM中的中断实现。
+上面是java中Thread.interrupt源码，其中interrupt0是JNI方法,就是前面讨论的JVM_Interrupt，在JVM中的中断实现。
 
-而b.interrupt(this)是给I/O中断使用的，目的是把一些阻塞I/O操作集成到java的中断框架中，使中断也能够中断这些
+而b.interrupt(this)是给I/O中断使用的，目的是把一些I/O操作集成到java的中断框架中，使中断也能够中断这些
 I/O。
 
 I/O操作如果为了能够被中断，那么先给自己注册一个Interruptible对象:
 
 .. code-block:: java
 
+    //java.lang.Thread.java
     static void blockedOn(Interruptible b) {
         Thread me = Thread.currentThread();
         synchronized (me.blockerLock) {
             me.blocker = b;
         }
     }
-然后在调用Thread.interrupt时候就会调用这个Interruptible对象的interrupt方法来完成对自己的中断。
+然后在调用Thread.interrupt来中断线程的时候就会调用这个Interruptible对象的interrupt方法来完成对I/O的中断。
 
 >>> b.interrupt(this);
 

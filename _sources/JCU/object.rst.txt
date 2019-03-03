@@ -1,0 +1,253 @@
+Java对象模型
+------------------
+
+java对象模型是一个oop-Kclass模型。一个java类在jvm中可以看成一个Kclass对象，
+一个java对象在jvm中可以看出是一个oop对象。然后还有一些元数据对象。
+当class文件被classloder状态到jvm中的时候，这些oop对象、Kclass对象
+和元数据对象会被class文件中对应的内容填充。
+
+.. code-block:: c++
+
+    // src/hotspot/share/oops/oopsHierarchy.hpp
+
+    // the oop hierarchy
+    typedef class oopDesc*                            oop;
+    typedef class   instanceOopDesc*            instanceOop;
+    typedef class   arrayOopDesc*                    arrayOop;
+    typedef class     objArrayOopDesc*            objArrayOop;
+    typedef class     typeArrayOopDesc*            typeArrayOop;
+
+    // The metadata hierarchy is separate from the oop hierarchy
+    //      class MetaspaceObj
+    class   ConstMethod;
+    class   ConstantPoolCache;
+    class   MethodData;
+    //      class Metadata
+    class   Method;
+    class   ConstantPool;
+    //      class CHeapObj
+    class   CompiledICHolder;
+
+    // The klass hierarchy is separate from the oop hierarchy
+    class Klass;
+    class   InstanceKlass;
+    class     InstanceMirrorKlass;
+    class     InstanceClassLoaderKlass;
+    class     InstanceRefKlass;
+    class   ArrayKlass;
+    class     ObjArrayKlass;
+    class     TypeArrayKlass;
+
+
+Java类
+------------
+
+一个java类在jvm中就是一个Klass对象。
+
+.. code-block:: c++
+
+    class Klass : public Metadata {
+        // Class name.
+        // 类名，如java/lang/String
+        Symbol*     _name;
+
+        // 父类，java是单继承的，所以只有一个父类
+        Klass*      _super;
+
+        // 子类，_subklass->next_sibling()表示下一个子类
+        Klass*      _subklass;
+        Klass*      _next_sibling;
+
+        // 这个类是被哪个classloader装载的
+        ClassLoaderData* _class_loader_data;
+
+        // 访问受限符
+        jint        _modifier_flags;
+        AccessFlags _access_flags;
+    }
+
+可以看到一个Kclass类基本就是描述了一个java类的基本信息，如类名，父类，子类，受限符等。
+我们知道一个java类还有属性、方法，这些信息保存在Klass的子类中。对于java类来讲，
+在jvm中就是instanceKlass的一个对象，instanceKlass继承自Klass。
+
+.. code-block:: c++
+
+    // src/hotspot/share/oops/instanceKlass.hpp
+    class InstanceKlass: public Klass {
+        // 类注解
+        Annotations*    _annotations;
+        // 这个类所属的包
+        PackageEntry*   _package_entry;
+        // 数组包含的元素的类
+        Klass* volatile _array_klasses;
+        // 常量池
+        ConstantPool* _constants;
+
+        // 非static属性大小，包括继承而来的
+        int             _nonstatic_field_size;
+        // static属性大小
+        int             _static_field_size;
+        // _constants中的索引，表示源代码文件名
+        u2              _source_file_name_index;
+        // static属性个数
+        u2              _static_oop_field_count;
+        // 这个类包含的属性的个数
+        u2              _java_fields_count;
+
+        // 当前编译的class文件的版本号
+        u2              _minor_version;  
+        u2              _major_version;
+
+        // 这个类是哪个线程初始化的
+        Thread*         _init_thread;
+
+        // 这个类在constant pool（常量池）中的索引
+        u2              _this_class_index;
+
+        // 这个类的方法
+        Array<Method*>* _methods;
+
+        // 这个类实现的接口
+        Array<Klass*>* _local_interfaces;
+
+        // 这个类的属性字段信息
+        // _fields是一个数组，形式如:
+        // f1: [access, name index, sig index, initial value index, low_offset, high_offset]
+        // f2: [access, name index, sig index, initial value index, low_offset, high_offset]
+        // ...
+        // fn: [access, name index, sig index, initial value index, low_offset, high_offset]
+        // [generic signature index]
+        // [generic signature index]
+        // ...
+        Array<u2>*      _fields;
+    }
+
+instanceKlass中保存了java类在的基本上所有信息，所有信息一目了然，正好对应上了class文件中的内容。
+
+java类的方法信息保存在jvm中Method对象中。我们知道一个方法不管在java中也好，python中也好，为了让方法能够正确的执行
+，一般要具有这么一些信息：
+
+1. 入参返回值描述信息，如个数，类型
+2. 字节码指令。方法执行就是执行这些字节码
+3. 局部变量大小，一般用来在方法执行的时候分配局部命名空间（local namespace），有时候还需要局部变量的名字等信息。
+4. 执行栈大小。jvm是一个基于栈的虚拟机实现。在执行方法的时候，先要分配好执行栈大小。
+
+.. code-block:: c++
+
+    // src/hotspot/share/oops/method.hpp
+    class Method : public Metadata {
+
+        ConstMethod*      _constMethod; // Method read-only data.
+        MethodData*       _method_data;
+        AccessFlags       _access_flags;  // 访问符   
+
+        CompiledMethod* volatile _code; // JIT编译的的native code
+    }
+
+可以看到一个方法的信息都保存在了ConstMethod对象中。
+
+.. code-block:: c++
+
+    // src/hotspot/share/oops/constMethod.hpp
+    class ConstMethod : public MetaspaceObj {
+
+        ConstantPool*     _constants; 
+
+        u1                _result_type; // 返回值类型
+
+        // Size of Java bytecodes allocated immediately after Method*.
+        u2                _code_size; // 这个方法字节码指令所需空间
+
+        u2                _name_index; // 方法名字在ConstantPool的索引
+        u2                _signature_index; // 方法signature在ConstantPool中的索引
+
+        u2                _max_stack; // 最大执行栈大小
+        u2                _max_locals; // 这和方法用到的所有局部变量大小
+        u2                _size_of_parameters; // 参数的大小
+    }
+
+可以看到ConstMethod中保存了方法的局部变量、入参和执行栈的信息以及字节码的信息，
+这些信息都是在编译阶段生成class文件就生成了，然后在class文件装在到jvm中的时候就保存在Method的ConstMethod对象中。
+
+**其中字节码指令保存在Method对象后面。**
+
+java类的所有属性字段信息保存在_fields数组中, 格式如下：
+
+>>> f1: [access, name index, sig index, initial value index, low_offset, high_offset]
+
+当new一个对象的时候，会根据这些信息构造oop对象，其中low_offset和high_offset就是该数据在oop对象中的偏移量。
+
+
+.. graphviz::
+
+   digraph object1 {
+       rankdir = "LR"
+       A [shape = "record" label=" _name|_super|_access_flags|...| <f1> _constants|_init_thread| <f2> _methods| <f3> _fields" xlabel="instanceKlass"]
+       B [shape = "record" label=" ...| <f1> _constMethod| _method_data|_access_flags|_code|字节码|..." xlabel="Methods"]
+       C [shape = "record" label=" <f1> _constants| _result_type|_code_size|_name_index|_max_stack|_max_locals|_size_of_parameters" xlabel="ConstMethod"]
+       D [shape = "record" label="...| | | | |..." xlabel="ConstantPool"]
+       E [shape = "record" label="...|access|name index|initial value index|low_offset|high_offset|..." xlabel="fields"]
+       A:f1 -> D
+       A:f2 -> B
+       A:f3 -> E
+       B:f1 -> C
+       C:f1 -> D
+   }
+
+
+Java对象
+-------------
+
+.. code-block:: c++
+    
+    // src/hotspot/share/oops/oop.hpp
+    typedef class oopDesc*  oop;
+
+    class oopDesc {
+        volatile markOop _mark; // 对象头
+        union _metadata {
+            Klass*      _klass; // 该对象的类
+            narrowKlass _compressed_klass;
+        } _metadata;
+    }
+
+oop描述了基本所有java对象都具有的信息，这个_mark是对象头，_metadata描述了这个对象所属的类。
+
+当我们new一个java对象的时候，在jvm中对应一个instanceOop对象。instanceOop类继承oopDesc。
+
+.. code-block:: c++
+
+    // src/hotspot/share/oops/instanceOop.hpp
+    class instanceOopDesc : public oopDesc {
+        ...
+        static int base_offset_in_bytes() {
+            return (UseCompressedOops && UseCompressedClassPointers) ?
+                klass_gap_offset_in_bytes() : sizeof(instanceOopDesc);
+
+        static bool contains_field_offset(int offset, int nonstatic_field_size) {
+            int base_in_bytes = base_offset_in_bytes();
+            return (offset >= base_in_bytes &&
+                (offset-base_in_bytes) < nonstatic_field_size * heapOopSize);
+        }
+        ...
+    }
+
+从instanceOop类定义可以看出,instanceOop对象除了继承自oopDesc的属性之外,没有定义额外的其他属性,
+那么一个java对象的属性数据都保存在哪里呢?从instanceOopDesc的contains_field_offset方法可以看出对于java的非
+静态属性保存在instanceOopDesc对象的后面。 每一个属性对应偏移量保存在instanceKlass对象中的_fields字段中。
+
+
+.. graphviz::
+
+    digraph object2 {
+        rankdir = "LR"
+        oop [shape = "record" label="_mark|_klass|field1|field2|..." xlabel="oop"]
+    }
+
+
+
+
+
+
+
+

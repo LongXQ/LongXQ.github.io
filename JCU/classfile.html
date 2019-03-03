@@ -1,0 +1,393 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>class文件 &#8212; CC 0.1 文档</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <script type="text/javascript" src="../_static/translations.js"></script>
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="next" title="常量池和符号表" href="constantpool.html" />
+    <link rel="prev" title="Java对原子操作和内存屏障的封装" href="atomic.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="class">
+<h1>class文件<a class="headerlink" href="#class" title="永久链接至标题">¶</a></h1>
+<p>java源代码在编译后会生成一个class文件，我们使用javap命令可以直观的看class文件内容。</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">javap</span> <span class="o">-</span><span class="n">h</span>
+<span class="go">用法: javap &lt;options&gt; &lt;classes&gt;</span>
+<span class="go">其中, 可能的选项包括:</span>
+<span class="go">  -? -h --help -help               输出此帮助消息</span>
+<span class="go">  -version                         版本信息</span>
+<span class="go">  -v  -verbose                     输出附加信息</span>
+<span class="go">  -l                               输出行号和本地变量表</span>
+<span class="go">  -public                          仅显示公共类和成员</span>
+<span class="go">  -protected                       显示受保护的/公共类和成员</span>
+<span class="go">  -package                         显示程序包/受保护的/公共类</span>
+<span class="go">                                   和成员 (默认)</span>
+<span class="go">  -p  -private                     显示所有类和成员</span>
+<span class="go">  -c                               对代码进行反汇编</span>
+<span class="go">  -s                               输出内部类型签名</span>
+<span class="go">  -sysinfo                         显示正在处理的类的</span>
+<span class="go">                                   系统信息 (路径, 大小, 日期, MD5 散列)</span>
+<span class="go">  -constants                       显示最终常量</span>
+<span class="go">  --module &lt;模块&gt;, -m &lt;模块&gt;       指定包含要反汇编的类的模块</span>
+<span class="go">  --module-path &lt;路径&gt;             指定查找应用程序模块的位置</span>
+<span class="go">  --system &lt;jdk&gt;                   指定查找系统模块的位置</span>
+<span class="go">  --class-path &lt;路径&gt;              指定查找用户类文件的位置</span>
+<span class="go">  -classpath &lt;路径&gt;                指定查找用户类文件的位置</span>
+<span class="go">  -cp &lt;路径&gt;                       指定查找用户类文件的位置</span>
+<span class="go">  -bootclasspath &lt;路径&gt;            覆盖引导类文件的位置</span>
+</pre></div>
+</div>
+<div class="highlight-java notranslate"><div class="highlight"><pre><span></span><span class="kn">package</span> <span class="nn">com.longxiongqiu</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">demo</span> <span class="o">{</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">name</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="n">String</span> <span class="nf">getName</span><span class="o">(){</span>
+        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span><span class="o">);</span>
+        <span class="n">name</span> <span class="o">+=</span> <span class="s">&quot;demo&quot;</span><span class="o">;</span>
+        <span class="k">return</span> <span class="n">name</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">javap</span> <span class="o">-</span><span class="n">c</span> <span class="o">-</span><span class="n">v</span> <span class="o">-</span><span class="n">p</span> <span class="n">demo</span>
+<span class="go">Classfile /Users/longxiongqiu/java/out/production/java/com/longxiongqiu/demo.class</span>
+<span class="go">  Last modified 2019年3月3日; size 1024 bytes</span>
+<span class="go">  MD5 checksum efe137acf2f67d6a72dd25fc85b74153</span>
+<span class="go">  Compiled from &quot;demo.java&quot;</span>
+<span class="go">public class com.longxiongqiu.demo</span>
+<span class="go">  minor version: 0</span>
+<span class="go">  major version: 55</span>
+<span class="go">  flags: (0x0021) ACC_PUBLIC, ACC_SUPER</span>
+<span class="go">  this_class: #6                          // com/longxiongqiu/demo</span>
+<span class="go">  super_class: #7                         // java/lang/Object</span>
+<span class="go">  interfaces: 0, fields: 1, methods: 2, attributes: 3</span>
+<span class="go">Constant pool:</span>
+<span class="go">   #1 = Methodref          #7.#21         // java/lang/Object.&quot;&lt;init&gt;&quot;:()V</span>
+<span class="go">   #2 = Fieldref           #22.#23        // java/lang/System.out:Ljava/io/PrintStream;</span>
+<span class="go">   #3 = Fieldref           #6.#24         // com/longxiongqiu/demo.name:Ljava/lang/String;</span>
+<span class="go">   #4 = Methodref          #25.#26        // java/io/PrintStream.println:(Ljava/lang/String;)V</span>
+<span class="go">   #5 = InvokeDynamic      #0:#30         // #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;</span>
+<span class="go">   #6 = Class              #31            // com/longxiongqiu/demo</span>
+<span class="go">   #7 = Class              #32            // java/lang/Object</span>
+<span class="go">   #8 = Utf8               name</span>
+<span class="go">   #9 = Utf8               Ljava/lang/String;</span>
+<span class="go">  #10 = Utf8               &lt;init&gt;</span>
+<span class="go">  #11 = Utf8               ()V</span>
+<span class="go">  #12 = Utf8               Code</span>
+<span class="go">  #13 = Utf8               LineNumberTable</span>
+<span class="go">  #14 = Utf8               LocalVariableTable</span>
+<span class="go">  #15 = Utf8               this</span>
+<span class="go">  #16 = Utf8               Lcom/longxiongqiu/demo;</span>
+<span class="go">  #17 = Utf8               getName</span>
+<span class="go">  #18 = Utf8               ()Ljava/lang/String;</span>
+<span class="go">  #19 = Utf8               SourceFile</span>
+<span class="go">  #20 = Utf8               demo.java</span>
+<span class="go">  #21 = NameAndType        #10:#11        // &quot;&lt;init&gt;&quot;:()V</span>
+<span class="go">  #22 = Class              #33            // java/lang/System</span>
+<span class="go">  #23 = NameAndType        #34:#35        // out:Ljava/io/PrintStream;</span>
+<span class="go">  #24 = NameAndType        #8:#9          // name:Ljava/lang/String;</span>
+<span class="go">  #25 = Class              #36            // java/io/PrintStream</span>
+<span class="go">  #26 = NameAndType        #37:#38        // println:(Ljava/lang/String;)V</span>
+<span class="go">  #27 = Utf8               BootstrapMethods</span>
+<span class="go">  #28 = MethodHandle       6:#39          // REF_invokeStatic java/lang/invoke/StringConcatFactory.makeConcatWithConstants:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;</span>
+<span class="go">  #29 = String             #40            // \u0001demo</span>
+<span class="go">  #30 = NameAndType        #41:#42        // makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;</span>
+<span class="go">  #31 = Utf8               com/longxiongqiu/demo</span>
+<span class="go">  #32 = Utf8               java/lang/Object</span>
+<span class="go">  #33 = Utf8               java/lang/System</span>
+<span class="go">  #34 = Utf8               out</span>
+<span class="go">  #35 = Utf8               Ljava/io/PrintStream;</span>
+<span class="go">  #36 = Utf8               java/io/PrintStream</span>
+<span class="go">  #37 = Utf8               println</span>
+<span class="go">  #38 = Utf8               (Ljava/lang/String;)V</span>
+<span class="go">  #39 = Methodref          #43.#44        // java/lang/invoke/StringConcatFactory.makeConcatWithConstants:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;</span>
+<span class="go">  #40 = Utf8               \u0001demo</span>
+<span class="go">  #41 = Utf8               makeConcatWithConstants</span>
+<span class="go">  #42 = Utf8               (Ljava/lang/String;)Ljava/lang/String;</span>
+<span class="go">  #43 = Class              #45            // java/lang/invoke/StringConcatFactory</span>
+<span class="go">  #44 = NameAndType        #41:#49        // makeConcatWithConstants:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;</span>
+<span class="go">  #45 = Utf8               java/lang/invoke/StringConcatFactory</span>
+<span class="go">  #46 = Class              #51            // java/lang/invoke/MethodHandles$Lookup</span>
+<span class="go">  #47 = Utf8               Lookup</span>
+<span class="go">  #48 = Utf8               InnerClasses</span>
+<span class="go">  #49 = Utf8               (Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;</span>
+<span class="go">  #50 = Class              #52            // java/lang/invoke/MethodHandles</span>
+<span class="go">  #51 = Utf8               java/lang/invoke/MethodHandles$Lookup</span>
+<span class="go">  #52 = Utf8               java/lang/invoke/MethodHandles</span>
+<span class="go">{</span>
+<span class="go">  private java.lang.String name;</span>
+<span class="go">    descriptor: Ljava/lang/String;</span>
+<span class="go">    flags: (0x0002) ACC_PRIVATE</span>
+<span class="go">\</span>
+<span class="go">  public com.longxiongqiu.demo();</span>
+<span class="go">    descriptor: ()V</span>
+<span class="go">    flags: (0x0001) ACC_PUBLIC</span>
+<span class="go">    Code:</span>
+<span class="go">      stack=1, locals=1, args_size=1</span>
+<span class="go">         0: aload_0</span>
+<span class="go">         1: invokespecial #1                  // Method java/lang/Object.&quot;&lt;init&gt;&quot;:()V</span>
+<span class="go">         4: return</span>
+<span class="go">      LineNumberTable:</span>
+<span class="go">        line 3: 0</span>
+<span class="go">      LocalVariableTable:</span>
+<span class="go">        Start  Length  Slot  Name   Signature</span>
+<span class="go">            0       5     0  this   Lcom/longxiongqiu/demo;</span>
+<span class="go">\</span>
+<span class="go">  public java.lang.String getName();</span>
+<span class="go">    descriptor: ()Ljava/lang/String;</span>
+<span class="go">    flags: (0x0001) ACC_PUBLIC</span>
+<span class="go">    Code:</span>
+<span class="go">      stack=2, locals=1, args_size=1</span>
+<span class="go">         0: getstatic     #2                  // Field java/lang/System.out:Ljava/io/PrintStream;</span>
+<span class="go">         3: aload_0</span>
+<span class="go">         4: getfield      #3                  // Field name:Ljava/lang/String;</span>
+<span class="go">         7: invokevirtual #4                  // Method java/io/PrintStream.println:(Ljava/lang/String;)V</span>
+<span class="go">        10: aload_0</span>
+<span class="go">        11: dup</span>
+<span class="go">        12: getfield      #3                  // Field name:Ljava/lang/String;</span>
+<span class="go">        15: invokedynamic #5,  0              // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;</span>
+<span class="go">        20: putfield      #3                  // Field name:Ljava/lang/String;</span>
+<span class="go">        23: aload_0</span>
+<span class="go">        24: getfield      #3                  // Field name:Ljava/lang/String;</span>
+<span class="go">        27: areturn</span>
+<span class="go">      LineNumberTable:</span>
+<span class="go">        line 7: 0</span>
+<span class="go">        line 8: 10</span>
+<span class="go">        line 9: 23</span>
+<span class="go">      LocalVariableTable:</span>
+<span class="go">        Start  Length  Slot  Name   Signature</span>
+<span class="go">            0      28     0  this   Lcom/longxiongqiu/demo;</span>
+<span class="go">}</span>
+<span class="go">SourceFile: &quot;demo.java&quot;</span>
+</pre></div>
+</div>
+<p>当class文件被classloader装载的时候，就会在jvm中保存在不同的对象中。</p>
+<p>class文件大致可以分为四个部分：</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&gt;&gt;&gt; // 第一部分为这个java类基本信息，如类名，父类、继承的接口等)，
+&gt;&gt;&gt; // 在jvm中这部分数据保存在instanceKlass对象中。
+public class com.longxiongqiu.demo
+  minor version: 0
+  major version: 55
+  flags: (0x0021) ACC_PUBLIC, ACC_SUPER
+  this_class: #6                          // com/longxiongqiu/demo
+  super_class: #7                         // java/lang/Object
+  interfaces: 0, fields: 1, methods: 2, attributes: 3
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&gt;&gt;&gt; // 第二部分为常量池, 保存了这个类中所有类、字段、方法的基本信息，类似一张符号表。
+&gt;&gt;&gt; // 有了常量池之后，其他地方只需要用一个索引号就能得到这些信息，而不用到处保存一份。
+&gt;&gt;&gt; // 这一部分数据在jvm中保存在ConstantPool对象中。
+Constant pool:
+   #1 = Methodref          #7.#21         // java/lang/Object.&quot;&lt;init&gt;&quot;:()V
+   #2 = Fieldref           #22.#23        // java/lang/System.out:Ljava/io/PrintStream;
+   #3 = Fieldref           #6.#24         // com/longxiongqiu/demo.name:Ljava/lang/String;
+   #4 = Methodref          #25.#26        // java/io/PrintStream.println:(Ljava/lang/String;)V
+   #5 = InvokeDynamic      #0:#30         // #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+   #6 = Class              #31            // com/longxiongqiu/demo
+   #7 = Class              #32            // java/lang/Object
+   #8 = Utf8               name
+   #9 = Utf8               Ljava/lang/String;
+  #10 = Utf8               &lt;init&gt;
+  #11 = Utf8               ()V
+  #12 = Utf8               Code
+  #13 = Utf8               LineNumberTable
+  #14 = Utf8               LocalVariableTable
+  #15 = Utf8               this
+  #16 = Utf8               Lcom/longxiongqiu/demo;
+  #17 = Utf8               getName
+  #18 = Utf8               ()Ljava/lang/String;
+  #19 = Utf8               SourceFile
+  #20 = Utf8               demo.java
+  #21 = NameAndType        #10:#11        // &quot;&lt;init&gt;&quot;:()V
+  #22 = Class              #33            // java/lang/System
+  #23 = NameAndType        #34:#35        // out:Ljava/io/PrintStream;
+  #24 = NameAndType        #8:#9          // name:Ljava/lang/String;
+  #25 = Class              #36            // java/io/PrintStream
+  #26 = NameAndType        #37:#38        // println:(Ljava/lang/String;)V
+  #27 = Utf8               BootstrapMethods
+  #28 = MethodHandle       6:#39          // REF_invokeStatic java/lang/invoke/StringConcatFactory.makeConcatWithConstants:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;
+  #29 = String             #40            // \u0001demo
+  #30 = NameAndType        #41:#42        // makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+  #31 = Utf8               com/longxiongqiu/demo
+  #32 = Utf8               java/lang/Object
+  #33 = Utf8               java/lang/System
+  #34 = Utf8               out
+  #35 = Utf8               Ljava/io/PrintStream;
+  #36 = Utf8               java/io/PrintStream
+  #37 = Utf8               println
+  #38 = Utf8               (Ljava/lang/String;)V
+  #39 = Methodref          #43.#44        // java/lang/invoke/StringConcatFactory.makeConcatWithConstants:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;
+  #40 = Utf8               \u0001demo
+  #41 = Utf8               makeConcatWithConstants
+  #42 = Utf8               (Ljava/lang/String;)Ljava/lang/String;
+  #43 = Class              #45            // java/lang/invoke/StringConcatFactory
+  #44 = NameAndType        #41:#49        // makeConcatWithConstants:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;
+  #45 = Utf8               java/lang/invoke/StringConcatFactory
+  #46 = Class              #51            // java/lang/invoke/MethodHandles$Lookup
+  #47 = Utf8               Lookup
+  #48 = Utf8               InnerClasses
+  #49 = Utf8               (Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;
+  #50 = Class              #52            // java/lang/invoke/MethodHandles
+  #51 = Utf8               java/lang/invoke/MethodHandles$Lookup
+  #52 = Utf8               java/lang/invoke/MethodHandles
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&gt;&gt;&gt; // 第三部分是类的字段信息，可以根据这些信息生成这个字段在java对象保存的位置的偏移量
+&gt;&gt;&gt; // 这部分数据保存在jvm中的instanceKlass对象的_fileds数组中.
+  private java.lang.String name;
+    descriptor: Ljava/lang/String;
+    flags: (0x0002) ACC_PRIVATE
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&gt;&gt;&gt; // 第四部分是类的方法信息，主要有方法名、访问符、需要用到的执行栈大小、局部变量个数和大小和入参个数。
+&gt;&gt;&gt; // 以及最重要的字节码指令。
+&gt;&gt;&gt; // 这部分数据保存在jvm中的instanceKlass对象的_methods数组中
+  public com.longxiongqiu.demo();
+    descriptor: ()V
+    flags: (0x0001) ACC_PUBLIC
+    Code:
+      stack=1, locals=1, args_size=1
+         0: aload_0
+         1: invokespecial #1                  // Method java/lang/Object.&quot;&lt;init&gt;&quot;:()V
+         4: return
+      LineNumberTable:
+        line 3: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       5     0  this   Lcom/longxiongqiu/demo;
+\
+  public java.lang.String getName();
+    descriptor: ()Ljava/lang/String;
+    flags: (0x0001) ACC_PUBLIC
+    Code:
+      stack=2, locals=1, args_size=1
+         0: getstatic     #2                  // Field java/lang/System.out:Ljava/io/PrintStream;
+         3: aload_0
+         4: getfield      #3                  // Field name:Ljava/lang/String;
+         7: invokevirtual #4                  // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+        10: aload_0
+        11: dup
+        12: getfield      #3                  // Field name:Ljava/lang/String;
+        15: invokedynamic #5,  0              // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+        20: putfield      #3                  // Field name:Ljava/lang/String;
+        23: aload_0
+        24: getfield      #3                  // Field name:Ljava/lang/String;
+        27: areturn
+      LineNumberTable:
+        line 7: 0
+        line 8: 10
+        line 9: 23
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0      28     0  this   Lcom/longxiongqiu/demo;
+}
+</pre></div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">CC</a></h1>
+
+
+
+<p class="blurb">日常总结分享</p>
+
+
+
+
+
+
+<h3>导航</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../link.html">网络资源</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../并发/index.html">并发编程：多核处理器的支持</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Java并发编程</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="atomic.html">Java对原子操作和内存屏障的封装</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">class文件</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constantpool.html">常量池和符号表</a></li>
+<li class="toctree-l2"><a class="reference internal" href="object.html">Java对象模型</a></li>
+<li class="toctree-l2"><a class="reference internal" href="object.html#id1">Java类</a></li>
+<li class="toctree-l2"><a class="reference internal" href="object.html#id2">Java对象</a></li>
+<li class="toctree-l2"><a class="reference internal" href="thread.html">Java线程模型</a></li>
+<li class="toctree-l2"><a class="reference internal" href="park.html">LockSupport.park原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sleep.html">Thread.sleep原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interrupt.html">Thread.interrupt原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="synchronized.html">synchronized原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wait.html">Object.wait原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="join.html">Thread.join原理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="blockAndInterruptAndWake.html">阻塞、唤醒和中断总结</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../rst.html">rst示例</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../graphviz.html">graphviz</a></li>
+</ul>
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3>快速搜索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="转向" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, longxiongqiu.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/JCU/classfile.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

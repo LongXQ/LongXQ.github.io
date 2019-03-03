@@ -1,2 +1,27 @@
 synchronized原理
 =====================
+
+.. code-block:: java
+
+    Object obj = new Object();
+
+    Thread thread1 = new Thread(() -> {
+        synchronized(obj) {
+            ...
+        }
+    })
+
+    Thread thread2 = new Thread(() -> {
+        synchronized(obj) {
+            ...
+        }
+    })
+
+一个java对象在jvm中就是一个oop对象。
+
+
+
+
+    
+        
+    
